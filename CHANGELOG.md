@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.0.76
+
+- Replace the Debian runtime with digest-pinned Python 3.12 on Alpine 3.23 and require patched zlib 1.3.2-r1 or newer.
+- Keep locked Python dependencies on binary wheels, retain timezone support and UID/GID 10001 startup protection.
+- Verify patched zlib, native artwork codecs, SQLite, matching, validation, timezones and TLS trust in both architecture CI jobs.
+- Runtime-only update; queued application changes are excluded.
+
 ## 1.0.0.75
 
 - Choose the Plex music library during first-time setup before the administrator account and initial scan are created.
