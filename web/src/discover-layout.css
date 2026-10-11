@@ -69,3 +69,14 @@
 .requests-workflow .request-sort-control{align-self:end}
 .request-sort-control .control-menu>button,.issues-toolbar>.control-menu>button{min-height:44px}
 .cover-status.partial{background:var(--surface-solid);color:var(--text);border:2px solid var(--accent)}
+
+/* Compact, consistent collapse controls and five portrait destinations. */
+.collapse-control{display:inline-flex;align-items:center;justify-content:center;flex:0 0 44px;width:44px;height:44px;min-height:44px;padding:10px;border:1px solid var(--border);border-radius:50%;background:var(--surface);color:var(--muted)}
+.collapse-control svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.collapse-control:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+.artist-popular .panel-head{display:flex;align-items:center;justify-content:space-between;gap:12px;text-align:left}
+.artist-popular .panel-head>div{min-width:0;flex:1}
+.artist-popular .panel-head h2,.artist-popular .panel-head p{margin:0 0 4px}
+@media(max-width:760px){.mobile-nav.glass-tabbar>button{flex:1;min-width:0;max-width:none}.mobile-nav.glass-tabbar .activity-nav{display:flex;flex-direction:column;align-items:center;justify-content:center}.artist-popular .panel-head{flex-wrap:nowrap}}
+
+.section-chevron{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none;vertical-align:middle}

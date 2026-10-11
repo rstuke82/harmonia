@@ -3,7 +3,7 @@ from urllib.parse import urlsplit
 from fastapi import HTTPException
 
 
-def music_connection(resource, token):
+def music_connection(resource, token, *, all_libraries=False):
     from .accounts import plex_json, headers
     connections=sorted(resource.get('connections') or [],key=lambda c:not bool(c.get('local')))
     urls=[]
@@ -25,7 +25,7 @@ def music_connection(resource, token):
         except HTTPException:
             continue
         reachable=True
-        music=next((s for s in libraries.get('MediaContainer',{}).get('Directory',[]) if s.get('type')=='artist'),None)
-        if music:return url,music
+        music=[s for s in libraries.get('MediaContainer',{}).get('Directory',[]) if s.get('type')=='artist']
+        if music:return url,music if all_libraries else music[0]
     if reachable:raise HTTPException(409,'No accessible Plex music library was found on the owned server.')
     raise HTTPException(503,'Could not reach your Plex server using its advertised connections. Check container networking and Plex remote access, then retry setup.')

@@ -148,7 +148,7 @@ def plex_json(method, url, **kwargs):
         raise HTTPException(503, 'Plex login is temporarily unavailable. Please try again.') from exc
 
 
-def verify(token, setup_hash=None):
+def verify(token, setup_hash=None, *, choose_library=False, library_key=None):
     from .storage import read_json
     root = root_repository()
     from .login_security import recover_setup, setup_required, check_setup_grant, commit_setup
@@ -177,7 +177,13 @@ def verify(token, setup_hash=None):
         if not resource:
             raise HTTPException(403,'The Plex server owner must sign in first to initialize Harmonia.')
         from .plex_setup import music_connection
-        server_url,music=music_connection(resource,token)
+        server_url,music=music_connection(resource,token,all_libraries=True)
+        if choose_library and not library_key:
+            return {'setup_libraries':[{'key':str(s['key']),'title':s.get('title','Music')} for s in music]}
+        if library_key:
+            music=next((s for s in music if str(s['key'])==library_key),None)
+            if music is None:raise HTTPException(403,'Choose an accessible Plex music library.')
+        else:music=music[0]
         server_token=resource.get('accessToken') or token
         startup=read_json(root.directory/'config.json')
         startup['plex']={'url':server_url,'token':server_token,'music_library_key':str(music['key']),'music_library_title':music.get('title','Music')}
@@ -294,8 +300,14 @@ def install(app):
         response.set_cookie(PIN_COOKIE, nonce, max_age=600, httponly=True, samesite='strict', secure=secure_cookie(request))
         return response
 
+    class LibraryChoice(BaseModel):
+        library_key: str = Field(min_length=1,max_length=64,pattern=r'^\d+$')
+
     @app.get('/api/auth/poll')
-    def poll(request: Request):
+    @app.post('/api/auth/poll')
+    def poll(request: Request, body: LibraryChoice | None = None):
+        if request.method=='POST' and request.headers.get('origin') != str(request.base_url).rstrip('/'):
+            raise HTTPException(403,'Choose your library from Harmonia.')
         nonce = request.cookies.get(PIN_COOKIE, '')
         key = hashlib.sha256(nonce.encode()).hexdigest()
         from .login_security import claim_poll, release_poll
@@ -309,7 +321,8 @@ def install(app):
             pin = plex_json('GET', f"https://plex.tv/api/v2/pins/{saved['id']}", headers=headers(), params={'code': saved['code']})
             if not pin.get('authToken'):
                 return JSONResponse({'pending': True},headers={'Retry-After':'2'})
-            user = verify(pin['authToken'], setup_hash=saved.get('setup_hash'))
+            user = verify(pin['authToken'], setup_hash=saved.get('setup_hash'), choose_library=True, library_key=body.library_key if body else None)
+            if 'setup_libraries' in user:return JSONResponse(user)
             delete('login_pins', key)
         finally:
             release_poll(repo,key,saved['lease'])

@@ -28,7 +28,7 @@ class LoginSecurity(unittest.TestCase):
         return next(r.endpoint for r in self.app.routes if getattr(r,'path',None)==path)
 
     def request(self,cookie='',ip='127.0.0.1'):
-        return Request({'type':'http','method':'POST','scheme':'http','path':'/','headers':[(b'host',b'test'),(b'cookie',cookie.encode())],'client':(ip,1),'server':('test',80),'query_string':b''})
+        return Request({'type':'http','method':'POST','scheme':'http','path':'/','headers':[(b'host',b'test'),(b'origin',b'http://test'),(b'cookie',cookie.encode())],'client':(ip,1),'server':('test',80),'query_string':b''})
 
     def key(self):
         security.initialize_setup(self.repo)
@@ -40,6 +40,39 @@ class LoginSecurity(unittest.TestCase):
         if url.endswith('/identity'):return {'MediaContainer':{'machineIdentifier':'machine'}}
         if url.endswith('/library/sections'):return {'MediaContainer':{'Directory':[{'key':'7','title':'Music','type':'artist'}]}}
         raise AssertionError(url)
+
+    def test_library_choice_excludes_video_and_does_not_commit_until_selected(self):
+        self.key();grant=self.repo.load_one('installation','setup')['key_hash']
+        libraries={'MediaContainer':{'Directory':[
+            {'key':'1','title':'Movies','type':'movie'},
+            {'key':'7','title':'Music','type':'artist'},
+            {'key':'8','title':'Lossless','type':'artist'}]}}
+        def plex(method,url,**kwargs):
+            return libraries if url.endswith('/library/sections') else self.plex(method,url,**kwargs)
+        with patch.object(accounts,'plex_json',side_effect=plex):
+            choice=accounts.verify('OWNER',setup_hash=grant,choose_library=True)
+            self.assertEqual(choice,{'setup_libraries':[{'key':'7','title':'Music'},{'key':'8','title':'Lossless'}]})
+            self.assertEqual(accounts.users(),{})
+            self.assertEqual(Store(self.repo).list(),[])
+            self.assertNotIn('SERVER',json.dumps(choice))
+            for key in ('1','999'):
+                with self.assertRaises(HTTPException) as error:
+                    accounts.verify('OWNER',setup_hash=grant,choose_library=True,library_key=key)
+                self.assertEqual(error.exception.status_code,403)
+                self.assertEqual(accounts.users(),{})
+            user=accounts.verify('OWNER',setup_hash=grant,choose_library=True,library_key='8')
+        self.assertTrue(user['admin'])
+        from playlist_bridge.storage import read_json
+        self.assertEqual(read_json(self.repo.directory/'config.json')['plex']['music_library_key'],'8')
+        self.assertEqual(len(Store(self.repo).list()),1)
+
+    def test_library_selection_rejects_foreign_origin_before_plex(self):
+        req=self.request()
+        req.scope['headers']=[(k,v) for k,v in req.scope['headers'] if k!=b'origin']+[(b'origin',b'https://attacker.invalid')]
+        with patch.object(accounts,'plex_json') as plex:
+            with self.assertRaises(HTTPException) as error:self.route('/api/auth/poll')(req)
+        self.assertEqual(error.exception.status_code,403)
+        plex.assert_not_called()
 
     def test_key_created_once_private_and_not_in_application_logs(self):
         key=self.key();security.initialize_setup(self.repo)
@@ -69,6 +102,12 @@ class LoginSecurity(unittest.TestCase):
         self.assertEqual(saved['setup_hash'],hashlib.sha256(key.encode()).hexdigest())
         with patch.object(accounts,'plex_json',side_effect=lambda method,url,**kw:{'authToken':'OWNER'} if '/pins/' in url else self.plex(method,url,**kw)):
             response=self.route('/api/auth/poll')(self.request(pin_cookie))
+            self.assertEqual(json.loads(response.body),{'setup_libraries':[{'key':'7','title':'Music'}]})
+            self.assertEqual(accounts.users(),{})
+            self.assertTrue((self.repo.directory/'setup-key').exists())
+            body_type=self.route('/api/auth/poll').__annotations__['body'].__args__[0]
+            with patch.object(security.time,'time',return_value=security.time.time()+3):
+                response=self.route('/api/auth/poll')(self.request(pin_cookie),body_type(library_key='7'))
         self.assertEqual(json.loads(response.body)['user']['admin'],True)
         self.assertFalse((self.repo.directory/'setup-key').exists())
         self.assertEqual(self.repo.load('login_pins'),{})

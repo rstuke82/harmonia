@@ -27,7 +27,7 @@ jobs:
       - name: Frontend regressions
         run: |
           npm --prefix web ci
-          for script in tests/*.cjs; do node "$script" || exit 1; done
+          for script in tests/*.cjs tests/*.mjs; do node "$script" || exit 1; done
       - name: Scan actual image OS and Python packages
         env:
           DOCKER_SCOUT_HUB_USER: ${{ secrets.DOCKER_SCOUT_HUB_USER }}
