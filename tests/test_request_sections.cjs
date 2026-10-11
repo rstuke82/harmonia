@@ -1,0 +1,10 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),ts=require('../web/node_modules/typescript');
+const code=ts.transpileModule(fs.readFileSync('web/src/requestSections.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText;
+const sandbox={exports:{}};vm.runInNewContext(code,sandbox);
+const rows=[{id:1,status:'Completed'},{id:2,status:'In Progress'},{id:3,status:'Needs Action'},{id:4,status:'In Progress'},{id:5,status:'Partially Available'},{id:6,status:'Cancelled / Failed'}];
+const sections=sandbox.exports.requestSections(rows,r=>r.status);
+assert.equal(JSON.stringify(sections.map(s=>s.name)),JSON.stringify(['Needs Action','In Progress','Partially Available','Completed','Cancelled / Failed']));
+assert.equal(JSON.stringify(sections[1].rows.map(r=>r.id)),'[2,4]');
+assert.equal(sandbox.exports.requestSections([],r=>r.status).length,0);
+assert.equal(sandbox.exports.requestSections(rows.filter(r=>r.status==='Completed'),r=>r.status).length,1);
+console.log('Request section order, within-section order, empty and filtered cases passed.');

@@ -1,0 +1,2 @@
+# Install the resolved Python 3.12 runtime dependencies.
+-r requirements.lock

@@ -1,0 +1,1 @@
+export function formatDuration(value:number|undefined){if(value==null||!Number.isFinite(Number(value))||Number(value)<=0)return 'Unavailable';const seconds=Number(value)>10000?Math.round(Number(value)/1000):Math.round(Number(value));return `${Math.floor(seconds/60)}:${String(seconds%60).padStart(2,'0')}`}

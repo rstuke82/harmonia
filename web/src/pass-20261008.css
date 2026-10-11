@@ -1,0 +1,103 @@
+/* Navigation material floats above readable content surfaces. */
+.shell main>header{position:relative;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:16px;margin-bottom:24px}
+.shell main>header>.header-search{display:block;grid-column:1;grid-row:1;width:100%;max-width:none;margin:0}
+.shell main>header>.profile-menu{grid-column:2;grid-row:1;justify-self:end}
+.shell main>header>.page-heading{grid-column:1/-1;grid-row:2;margin:0}
+.header-search input{min-height:48px;border-radius:24px;background:color-mix(in srgb,var(--surface) 88%,transparent);backdrop-filter:blur(20px);box-shadow:inset 0 1px 0 #ffffff14,0 4px 20px #0001}
+.app-sidebar,.mobile-nav,.settings-navigation,.section-tabs{backdrop-filter:blur(24px) saturate(140%);-webkit-backdrop-filter:blur(24px) saturate(140%);box-shadow:inset 0 1px 0 #ffffff18}
+.settings-layout.settings-detail,.settings-layout.settings-index{display:block;min-width:0}
+.settings-layout>.settings-navigation{display:flex;flex-direction:row;gap:4px;overflow-x:auto;width:100%;position:relative;top:auto;margin:0 0 24px;padding:6px;border:1px solid var(--border);border-radius:18px;background:color-mix(in srgb,var(--surface) 90%,transparent)}
+.settings-layout>.settings-navigation a{flex:0 0 auto;min-height:44px;display:flex;align-items:center;border-radius:12px;padding:10px 16px;white-space:nowrap}
+.settings-navigation a.active-tab{background:color-mix(in srgb,var(--accent) 17%,var(--surface));color:var(--accent);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--accent) 35%,transparent)}
+.settings-content{display:block!important;min-width:0;width:100%}
+.settings-content>.panel{border:0;border-radius:0;background:transparent;box-shadow:none;padding:16px 4px 24px;margin:0}
+.settings-back{display:none!important}
+.settings-subnavigation{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 16px}
+.settings-subnavigation:empty{display:none}
+.settings-subnavigation a{padding:10px 16px;min-height:44px;border-radius:12px;display:flex;align-items:center}
+.settings-subnavigation a[aria-current=page]{background:var(--input);color:var(--accent)}
+.settings-content .form-grid{display:flex;flex-direction:column;gap:0;max-width:1100px}
+.settings-content .form-grid>label,.settings-content form>label,.settings-content .appearance-row{display:grid;grid-template-columns:minmax(180px,38%) minmax(0,1fr);gap:20px;align-items:center;padding:20px 0;border-bottom:1px solid var(--border);margin:0;width:100%}
+.settings-content label>input:not([type=checkbox]),.settings-content label>select,.settings-content label>textarea{min-width:0;width:100%;margin:0}
+.settings-content .permission-switch{display:flex;gap:12px;align-items:center}
+.settings-content .permission-switch input{flex:none}
+.settings-content .settings-save,.settings-content .settings-actions{margin:20px 0;justify-content:flex-end}
+.jobs-table-wrap{overflow-x:auto;max-width:100%;border:1px solid var(--border);border-radius:18px}
+.jobs-table{width:100%;border-collapse:collapse;text-align:left;background:var(--surface)}
+.jobs-table th{font-size:.78rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);padding:14px 18px;background:var(--input)}
+.jobs-table td{padding:18px;border-top:1px solid var(--border);vertical-align:middle}
+.jobs-table td:first-child{width:35%}
+.jobs-table td>small,.jobs-table td>.task-result{display:block;margin-top:5px}
+.jobs-table td>.actions{justify-content:flex-end;flex-wrap:nowrap}
+.jobs-table td button{white-space:nowrap;min-height:44px}
+.startup-settings{margin:24px 0;padding:20px 0;border-top:1px solid var(--border)}
+.startup-settings>label{display:grid;grid-template-columns:minmax(180px,38%) minmax(0,1fr);gap:20px;align-items:center;max-width:1000px}
+.about-facts{margin:24px 0}
+.about-facts>div{display:grid;grid-template-columns:minmax(180px,45%) minmax(0,1fr);gap:20px;padding:24px 0;border-bottom:1px solid var(--border);align-items:center}
+.about-facts dt{font-weight:600;color:var(--muted)}
+.about-facts dd{margin:0;overflow-wrap:anywhere}
+.about-facts code{padding:8px 12px;background:var(--input);border-radius:10px;display:inline-block}
+.artist-directory-card{display:block!important;overflow:hidden}
+.artist-directory-main{width:100%;min-height:120px;padding:20px!important;border-radius:inherit}
+.artist-table tbody tr{cursor:pointer}
+.discover-shelf{margin-bottom:32px}
+.discover-shelf>.panel-head{margin-bottom:16px}
+.shelf-card{color:var(--text);text-decoration:none}
+.shelf-card:hover,.artist-directory-main:hover{background:color-mix(in srgb,var(--accent) 7%,var(--surface))}
+.discover-grid{grid-template-columns:repeat(auto-fill,minmax(180px,1fr));align-items:stretch;margin-bottom:20px}
+.discover-grid .album-card h3{font-size:1rem;line-height:1.4;margin:12px 0 4px}
+.discover-grid .album-card p{margin:4px 0 12px}
+.discover-grid .album-card .actions{margin-top:auto}
+.discover-grid .album-card .actions>button{min-height:44px;flex:1 1 auto}
+button:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+@media(max-width:850px){
+ .shell main>header{grid-template-columns:minmax(0,1fr) 44px;gap:12px}
+ .shell main>header>.mobile-brand{grid-column:1;grid-row:1}
+ .shell main>header>.profile-menu{grid-column:2;grid-row:1}
+ .shell main>header>.header-search{display:block;grid-column:1/-1;grid-row:2;max-width:none}
+ .shell main>header>.page-heading{grid-row:3}
+ .settings-layout .settings-navigation{display:flex!important;margin-bottom:16px}
+ .settings-layout .settings-content{display:block!important}
+ .settings-content .form-grid>label,.settings-content form>label,.settings-content .appearance-row,.startup-settings>label,.about-facts>div{grid-template-columns:1fr;gap:10px;padding:16px 0}
+ .settings-content .permission-switch{display:flex}
+ .settings-content .appearance-row .segmented{flex-wrap:wrap}
+ .jobs-table,.jobs-table tbody,.jobs-table tr,.jobs-table td{display:block;width:100%}
+ .jobs-table thead{display:none}
+ .jobs-table td{padding:6px 16px;border:0}
+ .jobs-table tr{padding:16px 0;border-bottom:1px solid var(--border)}
+ .jobs-table td:first-child{width:100%}
+ .jobs-table td:nth-child(3):before{content:'Last run: ';color:var(--muted)}
+ .jobs-table td:nth-child(4):before{content:'Next run: ';color:var(--muted)}
+ .jobs-table td>.actions{justify-content:flex-start;margin-top:8px}
+ .discover-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+ .discover-grid .album-card{padding:12px}
+ .artist-directory-main{padding:14px!important}
+ .mobile-nav>button{flex:1}
+}
+@media(prefers-reduced-transparency:reduce){.app-sidebar,.mobile-nav,.settings-navigation,.header-search input{backdrop-filter:none;-webkit-backdrop-filter:none;background:var(--surface)}}
+@media(prefers-contrast:more){.settings-navigation,.header-search input,.jobs-table-wrap{border:2px solid var(--text)}}
+@media(prefers-reduced-motion:reduce){*,*:before,*:after{scroll-behavior:auto!important;transition:none!important;animation:none!important}}
+
+.settings-layout>.settings-navigation{flex-wrap:nowrap}
+
+.discover-heading{margin:32px 0 16px;padding:0;background:transparent;border:0}
+.discover-heading h2{margin:0}
+.discover-heading>p{margin:8px 0}
+
+.artist-directory-card{padding:0!important}
+/* Keep heading text above the search field's composited material layer. */
+.shell main>header>.page-heading{position:relative;z-index:2}
+.header-search input{backdrop-filter:none;-webkit-backdrop-filter:none}
+
+.album-cover{position:relative;aspect-ratio:1/1;width:100%;flex:none;overflow:hidden;border-radius:12px;background:var(--input)}
+.discover-grid .album-cover>img{position:absolute;inset:0;display:block;width:100%;height:100%;max-height:none;object-fit:cover;object-position:center;aspect-ratio:auto;border-radius:inherit}
+.album-cover>.album-art-placeholder{position:absolute;inset:0;width:100%;height:100%;aspect-ratio:auto}
+.cover-status{position:absolute;right:8px;top:8px;z-index:1;display:grid;place-items:center;width:30px;height:30px;border-radius:50%;font-size:18px;font-weight:800;line-height:1;border:1px solid #ffffff50;box-shadow:0 2px 8px #0005;background:#394353;color:#fff}
+.cover-status.available{background:#147c43;color:#fff}
+.cover-status.imported{background:#a15e00;color:#fff}
+.cover-status.progress{background:#1262cb;color:#fff}
+.cover-status.pending{background:#596679;color:#fff}
+.cover-status.error{background:#b62639;color:#fff}
+.cover-status.missing{background:#394353;color:#fff}
+.discover-grid .artwork-only{padding:0;border:0;background:transparent;box-shadow:none;border-radius:12px;overflow:hidden}
+.discover-grid .artwork-only:hover .album-cover{box-shadow:inset 0 0 0 2px var(--accent)}

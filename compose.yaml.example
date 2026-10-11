@@ -1,0 +1,23 @@
+services:
+  harmonia:
+    container_name: harmonia
+    # Image tags: latest (stable), beta, or a published version.
+    image: ghcr.io/rstuke82/harmonia:latest
+    restart: unless-stopped
+    ports:
+      - "8173:8173"
+    environment:
+      HARMONIA_PORT: "8173"
+      HARMONIA_DATA_DIR: /config
+      HARMONIA_IMAGE: ghcr.io/rstuke82/harmonia:latest
+      # Used for update notifications; does not automatically install updates.
+      # Options: stable (image :latest) or beta (image :beta).
+      HARMONIA_UPDATE_CHANNEL: stable
+      # Change this to your timezone, for example America/Chicago.
+      TZ: Etc/UTC
+    volumes:
+      - ./config:/config
+      # Optional: local library scanning (read-only).
+      # Replace the example host path with your music library location.
+      # - /path/to/music:/music:ro
+    stop_grace_period: 30s

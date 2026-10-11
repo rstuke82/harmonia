@@ -1,0 +1,21 @@
+import {useEffect,useState} from 'react'
+import {request} from './api'
+import ErrorNotice from './ErrorNotice'
+
+const fields:any={
+ artist_description:['Artist description',['lastfm','musicbrainz']],artist_portrait:['Artist portrait',['plex','fanart','apple']],
+ artist_hero:['Artist background',['plex','fanart']],genres:['Genres',['apple','musicbrainz','lastfm']],
+ album_artwork:['Album artwork',['plex','coverartarchive','fanart','apple']],release_date:['Release date',['musicbrainz','apple']],
+ popular_tracks:['Popular tracks',['lastfm']],
+}
+const names:any={musicbrainz:'MusicBrainz',lidarr:'Lidarr',apple:'Apple Music / iTunes',plex:'Plex',lastfm:'Last.fm',coverartarchive:'Cover Art Archive',fanart:'Fanart.tv'}
+export default function MetadataSources(){
+ const [data,setData]=useState<any>(null),[error,setError]=useState(''),[message,setMessage]=useState(''),[busy,setBusy]=useState(false)
+ useEffect(()=>{request('/api/settings/metadata-sources').then(setData).catch(e=>setError(e.message))},[])
+ function active(key:string){const values=data.source_order?.[key]||[];return ['artist_portrait','artist_hero','album_artwork'].includes(key)?['plex',...values.filter((v:string)=>v!=='plex')]:values}
+ function update(key:string,values:string[]){setData({...data,source_order:{...data.source_order,[key]:values}})}
+ function toggle(key:string,source:string){const values=active(key);update(key,values.includes(source)?values.filter((v:string)=>v!==source):[...values,source])}
+ function move(key:string,index:number,step:number){const values=[...active(key)],next=index+step;if(next<0||next>=values.length)return;[values[index],values[next]]=[values[next],values[index]];update(key,values);setMessage('Order changed. Save Metadata Sources to apply it.')}
+ async function save(){setBusy(true);try{const payload={...Object.fromEntries(Object.keys(fields).map(k=>[k,active(k).length?'auto':'none'])),artist_identity:'musicbrainz',album_identity:data.album_identity||'auto',source_order:data.source_order};setData(await request('/api/settings/metadata-sources',{method:'PUT',body:JSON.stringify(payload)}));setMessage('Metadata source order saved. Refresh library metadata to fill newly enabled fields.');setError('')}catch(e:any){setError(e.message)}finally{setBusy(false)}}
+ return <section className="panel"><h2>Metadata Sources</h2><p>MusicBrainz is the canonical identity. Lidarr remains the library manager, while display metadata comes directly from the providers listed here. Plex artwork is always used first. Other artwork sources are fallbacks for items without Plex artwork.</p>{error&&<ErrorNotice error={error}/>} {!data&&!error&&<p role="status">Loading metadata sources…</p>}{data&&<fieldset disabled={busy} className="editor-fields"><label>Album identity<select value={data.album_identity||'auto'} onChange={e=>setData({...data,album_identity:e.target.value})}><option value="auto">Automatic</option><option value="musicbrainz">MusicBrainz</option></select></label><div className="metadata-source-table">{Object.entries(fields).map(([key,value]:any)=><div className="metadata-field-row" key={key}><strong>{value[0]}</strong><div className="metadata-order-list">{value[1].map((source:string)=>{const index=active(key).indexOf(source),enabled=index>=0;return <div className={`metadata-order-row ${enabled?'enabled':''}`} key={source}><label><input type="checkbox" checked={enabled} disabled={source==='plex'} onChange={()=>toggle(key,source)}/>{names[source]}{data.availability?.[source]===false?' · Not configured':''}</label><button type="button" disabled={source==='plex'||!enabled||index===0||(active(key)[0]==='plex'&&index===1)} aria-label={`Move ${names[source]} up`} onClick={()=>move(key,index,-1)}>↑</button><button type="button" disabled={source==='plex'||!enabled||index===active(key).length-1} aria-label={`Move ${names[source]} down`} onClick={()=>move(key,index,1)}>↓</button></div>})}</div>{!active(key).length&&<small>This field will not be shown.</small>}</div>)}</div><button disabled={busy} onClick={save}>{busy?'Saving…':'Save Metadata Sources'}</button></fieldset>}{message&&<p role="status">{message}</p>}<p className="muted">Provider credentials and connection settings are managed directly below this source order. Spotify links are reviewed per artist and do not require a Spotify API key.</p></section>
+}

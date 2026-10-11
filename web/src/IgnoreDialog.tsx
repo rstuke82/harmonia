@@ -1,0 +1,8 @@
+import ErrorNotice from './ErrorNotice'
+import {useState} from 'react'
+import {api} from './api'
+import Modal from './Modal'
+export default function IgnoreDialog({track,close,done}:{track:{title:string;artist:string;album?:string;memberships:{key:string;name:string}[]};close:()=>void;done:()=>Promise<void>}){
+ const [universal,setUniversal]=useState(false),[keys,setKeys]=useState(track.memberships.map(m=>m.key)),[error,setError]=useState(''),[busy,setBusy]=useState(false)
+ return <Modal onClose={close} busy={busy}><div className="modal" role="dialog" aria-modal="true" aria-label="Ignore track"><h2>Ignore {track.title}</h2><p>{track.artist}</p><label><input type="checkbox" checked={universal} onChange={e=>setUniversal(e.target.checked)}/> Ignore universally — all current and future playlists</label>{!universal&&track.memberships.map(m=><label className="playlist-choice" key={m.key}><input type="checkbox" checked={keys.includes(m.key)} onChange={e=>setKeys(e.target.checked?[...keys,m.key]:keys.filter(k=>k!==m.key))}/>{m.name}</label>)}<p className="muted">Ignored tracks will be skipped by matching and removed from Plex on the next sync. Stop ignoring tracks in Blocklist → Ignored Tracks.</p>{error&&<ErrorNotice error={error}/>}<div className="actions"><button disabled={busy} onClick={close}>Cancel</button><button disabled={busy||(!universal&&!keys.length)} onClick={async()=>{setBusy(true);try{await api.ignore({title:track.title,artist:track.artist,album:track.album||'',universal,playlist_keys:keys});await done();close()}catch(e:any){setError(e.message)}finally{setBusy(false)}}}>Ignore track</button></div></div></Modal>
+}

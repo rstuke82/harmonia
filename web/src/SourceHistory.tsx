@@ -1,0 +1,7 @@
+import {useEffect,useState} from 'react'
+import {request} from './api'
+export default function SourceHistory({playlistKey,revision}:{playlistKey:string;revision?:string}){
+ const [rows,setRows]=useState<any[]>([]),[filter,setFilter]=useState('all'),[error,setError]=useState(''),[open,setOpen]=useState(false)
+ useEffect(()=>{if(open)request<any[]>(`/api/playlists/${encodeURIComponent(playlistKey)}/source-history`).then(setRows).catch(e=>setError(e.message))},[playlistKey,revision,open])
+ return <details onToggle={e=>setOpen(e.currentTarget.open)}><summary>Source History</summary><p>Changes detected by Harmonia, not the source's original edit time.</p><select aria-label="Source changes" value={filter} onChange={e=>setFilter(e.target.value)}><option value="all">All changes</option><option value="added">Added</option><option value="removed">Removed</option></select>{error&&<p role="alert">{error}</p>}{rows.map((r,i)=><details key={i}><summary>Detected {new Date(r.detected_at).toLocaleString()} · {r.added.reduce((n:number,t:any)=>n+t.count,0)} added · {r.removed.reduce((n:number,t:any)=>n+t.count,0)} removed</summary>{['added','removed'].filter(k=>filter==='all'||filter===k).map(k=><div key={k}><strong>{k==='added'?'Added':'Removed'}</strong><ul>{r[k].map((t:any,j:number)=><li key={j}>{t.title} — {t.artist}{t.count>1?` × ${t.count}`:''}</li>)}</ul></div>)}{r.job_id&&<a href={`#activity/${r.job_id}`}>View activity</a>}</details>)}{!rows.length&&<p>No changes recorded since the source baseline.</p>}</details>
+}

@@ -1,0 +1,12 @@
+import {useState,useRef} from 'react'
+import {api,MissingTrack} from './api'
+import Modal from './Modal'
+import ErrorNotice from './ErrorNotice'
+export default function BulkIgnore({tracks,close,done}:{tracks:MissingTrack[];close:()=>void;done:()=>void}){
+ const memberships=Array.from(new Map(tracks.flatMap(t=>t.memberships).map(m=>[m.key,m])).values())
+ const [universal,setUniversal]=useState(false),[keys,setKeys]=useState(memberships.map(m=>m.key)),[busy,setBusy]=useState(false),[error,setError]=useState('')
+ const submitting=useRef(false)
+ const affected=tracks.filter(t=>universal||t.memberships.some(m=>keys.includes(m.key)))
+ async function save(){if(submitting.current)return;submitting.current=true;setBusy(true);try{await api.enqueue('ignore_batch',{tracks:affected.map(t=>({title:t.title,artist:t.artist,album:t.album||'',universal,playlist_keys:t.memberships.filter(m=>keys.includes(m.key)).map(m=>m.key)}))});window.dispatchEvent(new Event('jobs-refresh'));done();close()}catch(e:any){setError(e.message)}finally{submitting.current=false;setBusy(false)}}
+ return <Modal onClose={close} busy={busy}><section className="modal" role="dialog" aria-modal="true" aria-label="Ignore selected tracks"><h2>Ignore {affected.length} track{affected.length===1?'':'s'}?</h2><ul className="bulk-ignore-tracks">{tracks.map((t,i)=><li key={i}>{t.title} — {t.artist}</li>)}</ul><label className="playlist-choice"><input type="checkbox" checked={universal} onChange={e=>setUniversal(e.target.checked)}/>Ignore universally — all current and future playlists</label>{!universal&&<><p>Ignore each track only in its selected playlists:</p><div className="bulk-ignore-tracks">{memberships.map(m=><label className="playlist-choice" key={m.key}><input type="checkbox" checked={keys.includes(m.key)} onChange={e=>setKeys(e.target.checked?[...keys,m.key]:keys.filter(k=>k!==m.key))}/>{m.name}</label>)}</div></>}<p>Rules are queued safely after current activity. Plex changes apply on the next sync. You can Stop Ignoring in Blocklist → Ignored Tracks.</p>{affected.length<tracks.length&&<p>{tracks.length-affected.length} tracks have no selected playlist and will be skipped.</p>}{affected.length>500&&<p className="error">Select up to 500 tracks per batch.</p>}{error&&<ErrorNotice error={error}/>}<div className="actions"><button disabled={busy} onClick={close}>Cancel</button><button disabled={busy||!affected.length||affected.length>500} onClick={save}>{busy?'Queuing…':'Ignore selected'}</button></div></section></Modal>
+}

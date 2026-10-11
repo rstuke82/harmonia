@@ -1,0 +1,60 @@
+# Harmonia local state / credentials
+config.json
+mapping.json
+missing_tracks.json
+match_metadata.json
+source_snapshots.json
+ignored_tracks.json
+artist_aliases.json
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Node / React / Vite
+web/node_modules
+web/node_modules/
+web/dist/
+web/.vite/
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+web/.env
+web/.env.*
+!web/.env.example
+
+# Editors / OS
+.DS_Store
+.vscode/
+.idea/
+
+# Logs
+*.log
+cron.log
+
+# Local backup files
+*.bak
+
+# Container/native persistent data and local backups
+backups/
+/data/
+/backup-state/
+*.bak
+*.db
+*.db-shm
+*.db-wal
+*.zip
+
+# Track the complete regression suite.
+.factory-reset.json
+
+# Persistent host configuration and CI image exports
+/config/
+/verification/
+
+# Local deployment file; the public template is compose.yaml.example.
+/compose.yaml
