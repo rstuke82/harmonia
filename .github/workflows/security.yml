@@ -35,4 +35,5 @@ jobs:
         run: |
           mkdir -p verification
           docker save harmonia:ci -o verification/image.tar
+          chmod 644 verification/image.tar
           docker run --rm -v "$PWD/verification:/scan:ro" -e DOCKER_SCOUT_HUB_USER -e DOCKER_SCOUT_HUB_PASSWORD docker/scout-cli:1.25.0@sha256:d385046155c692ff5f4752fc32d612202a9211ae2c7904ae52bb65f9e1dc620a cves --exit-code --only-severity critical,high archive:///scan/image.tar
