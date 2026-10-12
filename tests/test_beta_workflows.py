@@ -5,8 +5,8 @@ import unittest
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
-from playlist_bridge import api, jobs, match_queue, console_logging
-from playlist_bridge.storage import Repository
+from harmonia import api, jobs, match_queue, console_logging
+from harmonia.storage import Repository
 
 
 class WorkflowTests(unittest.TestCase):
@@ -29,7 +29,7 @@ class WorkflowTests(unittest.TestCase):
                                  ignored_tracks={}, match_metadata={}, save=Mock())
         plex = Mock()
         plex.search_library.return_value = [{**t, 'plex_id': str(n)} for n, t in enumerate(tracks)]
-        with patch.object(api, '_config', return_value=config), patch.object(api, '_health_plex', return_value=plex), patch.object(api, 'job_store', return_value=self.store), patch('playlist_bridge.process_lock.ProcessLock', return_value=contextlib.nullcontext()), patch.object(api, '_capture', return_value=({'errors': 0}, '')) as sync, patch.object(jobs, 'activity') as activity:
+        with patch.object(api, '_config', return_value=config), patch('harmonia.library.playable_tracks',return_value=plex.search_library.return_value), patch.object(api,'_health_plex',side_effect=AssertionError('Match validation must use Harmonia Library')), patch.object(api, 'job_store', return_value=self.store), patch('harmonia.process_lock.ProcessLock', return_value=contextlib.nullcontext()), patch.object(api, '_capture', return_value=({'errors': 0}, '')) as sync, patch.object(jobs, 'activity') as activity:
             result = match_queue.execute({'changes': match_queue.available(self.repo)})
         activity.assert_called_with(mode='completed', stage='Playlist completed')
         self.assertEqual(sync.call_count, 1)
@@ -50,7 +50,7 @@ class WorkflowTests(unittest.TestCase):
                                  ignored_tracks={}, match_metadata={}, save=Mock())
         plex = Mock()
         plex.search_library.return_value = [{**t, 'plex_id': str(n)} for n, t in enumerate(tracks)]
-        with patch.object(api, '_config', return_value=config), patch.object(api, '_health_plex', return_value=plex), patch.object(api, 'job_store', return_value=self.store), patch('playlist_bridge.process_lock.ProcessLock', return_value=contextlib.nullcontext()), patch.object(api, '_capture', return_value=({'errors': 1}, '')) as sync, patch.object(jobs, 'activity') as activity:
+        with patch.object(api, '_config', return_value=config), patch('harmonia.library.playable_tracks',return_value=plex.search_library.return_value), patch.object(api,'_health_plex',side_effect=AssertionError('Match validation must use Harmonia Library')), patch.object(api, 'job_store', return_value=self.store), patch('harmonia.process_lock.ProcessLock', return_value=contextlib.nullcontext()), patch.object(api, '_capture', return_value=({'errors': 1}, '')) as sync, patch.object(jobs, 'activity') as activity:
             result = match_queue.execute({'changes': match_queue.available(self.repo)})
         self.assertEqual(activity.call_args.kwargs['mode'], 'failed')
         self.assertEqual(sync.call_count, 1)
@@ -65,7 +65,7 @@ class WorkflowTests(unittest.TestCase):
         self.assertIn('Match edits saved', result['playlists'][0]['error'])
 
     def test_verification_names_absent_tracks_and_accepts_duplicate_collapse(self):
-        from playlist_bridge.verification import compare, track_details
+        from harmonia.verification import compare, track_details
         expected = ['1','2','1']
         actual = [{'plex_id':'1'}]
         library = [{'plex_id':'1','title':'Repeated','artist':'Artist'}, {'plex_id':'2','title':'Missing Song','artist':'Other','album':'Album'}]

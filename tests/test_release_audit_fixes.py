@@ -5,11 +5,11 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 from fastapi import FastAPI
-from playlist_bridge import accounts, library, saved_views, album_apple_artwork
-from playlist_bridge.edition_preferences import findings, ranker
-from playlist_bridge.database_maintenance import clear_cache, status
-from playlist_bridge.storage import Repository
-from playlist_bridge.jobs import Store
+from harmonia import accounts, library, saved_views, album_apple_artwork
+from harmonia.edition_preferences import findings, ranker
+from harmonia.database_maintenance import clear_cache, status
+from harmonia.storage import Repository
+from harmonia.jobs import Store
 import test_build_20261007_14 as fixtures
 
 
@@ -32,7 +32,7 @@ class ArtworkLinkFix(unittest.TestCase):
     def test_changed_link_changes_candidate_and_preserves_selected_cover(self):
         put, reset, choices = self.routes()
         self.repo.save({'artwork_overrides':{'album:'+fixtures.ALBUM+':cover':{'url':'https://saved.example/cover.jpg','provider':'manual'}}})
-        with accounts.as_user(self.user), patch('playlist_bridge.fanart.lookup', return_value={}), patch.object(album_apple_artwork.requests, 'get', return_value=self.response()) as get:
+        with accounts.as_user(self.user), patch('harmonia.fanart.lookup', return_value={}), patch.object(album_apple_artwork.requests, 'get', return_value=self.response()) as get:
             put(fixtures.ALBUM, SimpleNamespace(provider='apple', url='https://music.apple.com/gb/album/new/123'))
             selected = self.repo.load_one('artwork_overrides','album:'+fixtures.ALBUM+':cover')
             self.assertEqual(selected['url'], 'https://saved.example/cover.jpg')
@@ -53,7 +53,7 @@ class ArtworkLinkFix(unittest.TestCase):
     def test_failed_lookup_suppresses_old_candidate_and_reports_retry(self):
         put, _, choices=self.routes()
         import requests
-        with accounts.as_user(self.user), patch('playlist_bridge.fanart.lookup',return_value={}), patch.object(album_apple_artwork.requests,'get',side_effect=requests.ConnectionError()):
+        with accounts.as_user(self.user), patch('harmonia.fanart.lookup',return_value={}), patch.object(album_apple_artwork.requests,'get',side_effect=requests.ConnectionError()):
             result=put(fixtures.ALBUM,SimpleNamespace(provider='apple',url='https://music.apple.com/us/album/new/123'))
             self.assertIn('retry',result['apple']['artwork_message'])
             result=choices('album',fixtures.ALBUM,'cover')
@@ -82,7 +82,7 @@ class ArtworkLinkFix(unittest.TestCase):
         app=FastAPI();library.register(app)
         refresh=next(r.endpoint for r in app.routes if r.path=='/api/library/albums/{album_id}/artwork/apple/refresh')
         self.repo.save({'library_album_service_links':{fixtures.ALBUM:{'apple':'https://music.apple.com/gb/album/new/123'}}})
-        with accounts.as_user(self.user),patch('playlist_bridge.fanart.lookup',return_value={}),patch.object(album_apple_artwork.requests,'get',return_value=self.response()) as get:
+        with accounts.as_user(self.user),patch('harmonia.fanart.lookup',return_value={}),patch.object(album_apple_artwork.requests,'get',return_value=self.response()) as get:
             before=choices('album',fixtures.ALBUM,'cover')
             self.assertTrue(before['apple_refresh_required']);get.assert_not_called()
             refresh(fixtures.ALBUM)
@@ -95,7 +95,7 @@ class ArtworkLinkFix(unittest.TestCase):
         _,_,choices=self.routes()
         self.plex['rows'][0].update(plex_artist_thumb='/portrait',plex_artist_art='/background')
         self.repo.save({'artwork_overrides':{'album:'+fixtures.ALBUM+':cover':{'url':'/old-plex-image','provider':'plex'}}})
-        with accounts.as_user(self.user),patch('playlist_bridge.fanart.lookup',return_value={}):
+        with accounts.as_user(self.user),patch('harmonia.fanart.lookup',return_value={}):
             result=choices('album',fixtures.ALBUM,'cover')
             for kind in ('portrait','hero'):
                 self.assertFalse(any(r['provider']=='plex' for r in choices('artist','1',kind)['candidates']))
@@ -104,7 +104,7 @@ class ArtworkLinkFix(unittest.TestCase):
     def test_hidden_link_never_requests_refresh(self):
         _,_,choices=self.routes()
         self.repo.save({'library_album_service_links':{fixtures.ALBUM:{'apple':''}}})
-        with accounts.as_user(self.user),patch('playlist_bridge.fanart.lookup',return_value={}):
+        with accounts.as_user(self.user),patch('harmonia.fanart.lookup',return_value={}):
             result=choices('album',fixtures.ALBUM,'cover')
         self.assertFalse(result['apple_refresh_required'])
 
@@ -126,7 +126,7 @@ class PreferenceFix(unittest.TestCase):
     def setUp(self):
         tmp=tempfile.TemporaryDirectory();self.addCleanup(tmp.cleanup)
         self.repo=Repository(Path(tmp.name))
-        patcher=patch('playlist_bridge.lidarr.config',return_value={});patcher.start();self.addCleanup(patcher.stop)
+        patcher=patch('harmonia.lidarr.config',return_value={});patcher.start();self.addCleanup(patcher.stop)
 
     def configure(self, formats=None, countries=None, official=True):
         self.repo.save({'musicbrainz_settings': {'preferences': {
@@ -170,9 +170,9 @@ class PersistentCacheFix(unittest.TestCase):
         self.repo=Repository(Path(tmp.name))
         for name in ('root_repository','personal_repository'):
             for module in ('accounts','saved_views'):
-                patcher=patch(f'playlist_bridge.{module}.{name}',return_value=self.repo)
+                patcher=patch(f'harmonia.{module}.{name}',return_value=self.repo)
                 patcher.start();self.addCleanup(patcher.stop)
-        patcher=patch('playlist_bridge.accounts.users',return_value={});patcher.start();self.addCleanup(patcher.stop)
+        patcher=patch('harmonia.accounts.users',return_value={});patcher.start();self.addCleanup(patcher.stop)
 
     def test_clear_counts_persistent_views_and_reprepares(self):
         @saved_views.saved('audit cache fix',deps={'inventory'})
@@ -189,7 +189,7 @@ class PersistentCacheFix(unittest.TestCase):
             second=page();self.assertEqual(second.status_code,202)
             self.assertNotEqual(json.loads(first.body)['job_id'],json.loads(second.body)['job_id'])
             job=Store(self.repo).get(json.loads(second.body)['job_id'])
-            with patch('playlist_bridge.jobs.current',return_value=SimpleNamespace(store=Store(self.repo),id=job['id'],action='prepare_views')),patch('playlist_bridge.jobs.progress'):
+            with patch('harmonia.jobs.current',return_value=SimpleNamespace(store=Store(self.repo),id=job['id'],action='prepare_views')),patch('harmonia.jobs.progress'):
                 saved_views.execute(job['payload'])
             self.assertEqual(json.loads(page().body),{'fresh':True})
 
@@ -203,7 +203,7 @@ class PersistentCacheFix(unittest.TestCase):
         with accounts.as_user(None):
             pending=reader();key=pending.headers['X-Saved-View'];job=Store(self.repo).get(json.loads(pending.body)['job_id'])
             context=SimpleNamespace(store=Store(self.repo),id=job['id'],action='prepare_views')
-            with patch('playlist_bridge.jobs.current',return_value=context),patch('playlist_bridge.jobs.progress'):
+            with patch('harmonia.jobs.current',return_value=context),patch('harmonia.jobs.progress'):
                 saved_views.execute(job['payload'])
             row=saved_views.load_row(self.repo,key)
             self.assertIsNone(row['data']);self.assertNotEqual(row['job_id'],job['id'])
@@ -212,7 +212,7 @@ class PersistentCacheFix(unittest.TestCase):
         member=Repository(self.repo.directory/'users'/'2')
         with member.connect() as db:
             db.execute("INSERT INTO prepared_views(key,name,params,permissions,data) VALUES('member','library','{}','{}','{}')")
-        with patch('playlist_bridge.accounts.users',return_value={'2':{'id':'2','admin':False}}),patch('playlist_bridge.accounts.personal_repository',return_value=member):
+        with patch('harmonia.accounts.users',return_value={'2':{'id':'2','admin':False}}),patch('harmonia.accounts.personal_repository',return_value=member):
             self.assertEqual(clear_cache(self.repo,'library_views')['deleted'],1)
         self.assertIsNone(saved_views.load_row(member,'member'))
 

@@ -4,10 +4,10 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from playlist_bridge import accounts
-from playlist_bridge.jobs import Store
-from playlist_bridge.metadata_sources import Preferences, SOURCE_DEFAULTS
-from playlist_bridge.storage import Repository
+from harmonia import accounts
+from harmonia.jobs import Store
+from harmonia.metadata_sources import Preferences, SOURCE_DEFAULTS
+from harmonia.storage import Repository
 
 
 class Beta13(unittest.TestCase):
@@ -46,9 +46,9 @@ class Beta13(unittest.TestCase):
         resource={'clientIdentifier':'machine','provides':'server','accessToken':'server-token','owned':True,
                   'connections':[{'local':True,'uri':'http://plex.local:32400'}]}
         libraries={'MediaContainer':{'Directory':[{'key':'7','type':'artist','title':'Music'}]}}
-        with patch('playlist_bridge.accounts.root_repository',return_value=self.repo),patch.object(
+        with patch('harmonia.accounts.root_repository',return_value=self.repo),patch.object(
                 accounts,'plex_json',side_effect=[profile,[resource],libraries,libraries]):
-            from playlist_bridge.login_security import initialize_setup
+            from harmonia.login_security import initialize_setup
             initialize_setup(self.repo)
             grant=self.repo.load_one('installation','setup')['key_hash']
             user=accounts.verify('claim-token',setup_hash=grant)

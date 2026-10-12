@@ -10,8 +10,8 @@ from types import SimpleNamespace
 from unittest.mock import Mock,patch,PropertyMock
 import requests
 from fastapi import HTTPException
-from playlist_bridge import accounts,api,jobs,lidarr,image_download,member_album_search,plex_setup
-from playlist_bridge.storage import Repository
+from harmonia import accounts,api,jobs,lidarr,image_download,member_album_search,plex_setup
+from harmonia.storage import Repository
 import test_30 as multi_test
 
 class MemberSearch(unittest.TestCase):
@@ -23,9 +23,9 @@ class MemberSearch(unittest.TestCase):
         self.b={**self.a,'id':'3'}
         for user in (self.a,self.b):
             self.repo.save({'accounts':{self.a['id']:self.a,self.b['id']:self.b}})
-        for target,value in [('playlist_bridge.accounts.root_repository',self.repo),('playlist_bridge.discover.root_repository',self.repo)]:
+        for target,value in [('harmonia.accounts.root_repository',self.repo),('harmonia.discover.root_repository',self.repo)]:
             patcher=patch(target,return_value=value);patcher.start();self.addCleanup(patcher.stop)
-        patcher=patch('playlist_bridge.config.CONFIG_FILE',self.path/'config.json');patcher.start();self.addCleanup(patcher.stop)
+        patcher=patch('harmonia.config.CONFIG_FILE',self.path/'config.json');patcher.start();self.addCleanup(patcher.stop)
     def endpoint(self,path):return next(r.endpoint for r in api.app.routes if getattr(r,'path','')==path)
     def start(self,user=None):
         with accounts.as_user(user or self.a):
@@ -37,8 +37,8 @@ class MemberSearch(unittest.TestCase):
         with accounts.as_user(self.a):
             job=jobs.Store(accounts.personal_repository()).get(json.loads(body)['id'])
         self.assertTrue(job['payload']['member_request']);self.assertEqual(job['payload']['request_user_id'],'2')
-        for path in ('/api/settings/lidarr','/api/lidarr/search-jobs'):
-            self.assertEqual(asyncio.run(multi_test.MultiUser.http(self,path,user=self.a))[0],403)
+        for method,path in (('GET','/api/settings/lidarr'),('POST','/api/lidarr/search-jobs')):
+            self.assertEqual(asyncio.run(multi_test.MultiUser.http(self,path,method,self.a,body={}))[0],403)
         self.assertEqual(asyncio.run(multi_test.MultiUser.http(self,'/api/requests-user/search-jobs','POST',self.a,body={'recording_offset':-1}))[0],422)
     def test_job_status_and_cancel_cannot_cross_accounts(self):
         job_id=self.start()

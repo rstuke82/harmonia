@@ -1,10 +1,10 @@
-from playlist_bridge.config import Config
+from harmonia.config import Config
 """Focused beta checks; external media services are never mutated."""
 import asyncio,json
 from unittest.mock import patch
 from test_30 import MultiUser
-from playlist_bridge import accounts, api
-from playlist_bridge.lidarr import state_put
+from harmonia import accounts, api
+from harmonia.lidarr import state_put
 
 class Beta3(MultiUser):
     def call(self,path,method='GET',user=None,body=None):
@@ -31,7 +31,7 @@ class Beta3(MultiUser):
             modes=accounts.personal_repository().load('playlist_schedules');self.assertEqual(modes['spotify:one']['mode'],'disabled');self.assertNotIn('spotify:two',modes)
         status,_=self.call('/api/playlists/sync-mode','PUT',self.b,{'playlist_keys':['spotify:one'],'mode':'inherit'});self.assertEqual(status,404)
     def test_shared_listing_and_preview_permissions(self):
-        scoped=patch('playlist_bridge.shared_playlists.root_repository',return_value=self.repo);scoped.start();self.addCleanup(scoped.stop)
+        scoped=patch('harmonia.shared_playlists.root_repository',return_value=self.repo);scoped.start();self.addCleanup(scoped.stop)
         source={'url':'https://music.apple.com/us/playlist/test/pl.test','name':'Rock Workout on Apple Music','custom_name':False}
         state_put(self.repo,'shared_playlists','example',source)
         status,rows=self.call('/api/shared-playlists');self.assertEqual(status,200);self.assertEqual(rows[0]['name'],'Rock Workout');self.assertFalse(rows[0]['subscribed'])
@@ -41,7 +41,7 @@ class Beta3(MultiUser):
         _,rows=self.call('/api/shared-playlists',user=self.b);self.assertFalse(rows[0]['subscribed'])
         status,_=self.call('/api/shared-playlists','POST',body=source);self.assertEqual(status,403)
     def test_names(self):
-        from playlist_bridge.source_names import clean
+        from harmonia.source_names import clean
         self.assertEqual(clean('â\x80\x9990s Workout on Apple Music'),'’90s Workout')
         self.assertEqual(clean('Rock Workout - Playlist - Apple Music'),'Rock Workout')
     def test_download_permissions_and_approval(self):
@@ -55,7 +55,8 @@ class Beta3(MultiUser):
         body={'artist':'Artist','album':'Album','album_id':album}
         status,_=self.call('/api/discover/album-link','PUT',body=body);self.assertEqual(status,403)
         status,_=self.call('/api/discover/album-link','PUT',self.admin,body);self.assertEqual(status,409)
-        state_put(self.repo,'inventory','lidarr',{'rows':[{'album_id':album}]})
+        state_put(self.repo,'lidarr','settings',{'enabled':True,'url':'http://lidarr','api_key':'key'})
+        state_put(self.repo,'inventory','lidarr',{'identity':__import__('harmonia.lidarr_requests',fromlist=['server_id']).server_id({'url':'http://lidarr','api_key':'key'}),'rows':[{'album_id':album,'title':'Album','artist':'Artist'}]})
         status,_=self.call('/api/discover/album-link','PUT',self.admin,body);self.assertEqual(status,200)
     def test_request_removal_preserves_album_inventory(self):
         state_put(self.repo,'inventory','lidarr',{'rows':[{'album_id':'album'}]})

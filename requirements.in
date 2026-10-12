@@ -10,3 +10,6 @@ uvicorn>=0.30.0
 croniter>=6.0.0
 tzdata>=2024.1
 mutagen>=1.47.0
+
+# Harden Plex sharing XML against DTDs and entity expansion.
+defusedxml==0.7.1

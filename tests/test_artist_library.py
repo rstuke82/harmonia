@@ -2,8 +2,8 @@ import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
-from playlist_bridge import local_library as local,artist_library as artists
-from playlist_bridge.storage import Repository
+from harmonia import local_library as local,artist_library as artists
+from harmonia.storage import Repository
 A='11111111-1111-1111-1111-111111111111'
 B='22222222-2222-2222-2222-222222222222'
 

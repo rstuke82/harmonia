@@ -1,9 +1,9 @@
 import tempfile,time,unittest
 from pathlib import Path
 from unittest.mock import Mock,patch
-from playlist_bridge import api_v1,jobs,lidarr_catalog
-from playlist_bridge.storage import Repository
-from playlist_bridge.lidarr_requests import server_id
+from harmonia import api_v1,jobs,lidarr_catalog
+from harmonia.storage import Repository
+from harmonia.lidarr_requests import server_id
 
 class ScopedCatalog(unittest.TestCase):
     def setUp(self):
@@ -22,7 +22,7 @@ class ScopedCatalog(unittest.TestCase):
         if path=='rename':self.assertEqual(kwargs['params']['artistId'],1);return []
         raise AssertionError('Unscoped or unrelated API call: '+path)
     def refresh(self,target):
-        with patch('playlist_bridge.lidarr_catalog.config',return_value=self.cfg),patch('playlist_bridge.lidarr_catalog.Client',return_value=self.client),patch('playlist_bridge.library.invalidate'),patch('playlist_bridge.inventory.scan',side_effect=AssertionError('full scan forbidden')),patch('playlist_bridge.inventory.reconcile',side_effect=AssertionError('global reconcile forbidden')):
+        with patch('harmonia.lidarr_catalog.config',return_value=self.cfg),patch('harmonia.lidarr_catalog.Client',return_value=self.client),patch('harmonia.library.invalidate'),patch('harmonia.inventory.scan',side_effect=AssertionError('full scan forbidden')),patch('harmonia.inventory.reconcile',side_effect=AssertionError('global reconcile forbidden')):
             return lidarr_catalog.refresh(self.repo,[target])
     def test_artist_rename_updates_only_affected_slice(self):
         result=self.refresh({'scope':'artist','id':1,'kind':'rename'})
@@ -62,7 +62,7 @@ class DurableTargets(unittest.TestCase):
     def save(self,batch):self.repo.save({api_v1.CATALOG_BATCH_NAMESPACE:{api_v1.CATALOG_BATCH_KEY:batch}})
     def read(self):return self.repo.load_one(api_v1.CATALOG_BATCH_NAMESPACE,api_v1.CATALOG_BATCH_KEY,{})
     def execute(self,callback=None):
-        with patch('playlist_bridge.accounts.root_repository',return_value=self.repo),patch('playlist_bridge.lidarr_catalog.refresh',side_effect=callback or (lambda repo,targets:{'summary':'Scoped','updated':len(targets)})),patch('playlist_bridge.inventory.scan',side_effect=AssertionError('full scan forbidden')):
+        with patch('harmonia.accounts.root_repository',return_value=self.repo),patch('harmonia.lidarr_catalog.refresh',side_effect=callback or (lambda repo,targets:{'summary':'Scoped','updated':len(targets)})),patch('harmonia.inventory.scan',side_effect=AssertionError('full scan forbidden')):
             return api_v1.execute_lidarr_webhook({'event':'catalog_batch'})
     def test_repeated_targets_coalesce_and_no_empty_followup(self):
         batch={}

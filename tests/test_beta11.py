@@ -5,8 +5,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from playlist_bridge import accounts, api, api_v1, jobs
-from playlist_bridge.storage import Repository
+from harmonia import accounts, api, api_v1, jobs
+from harmonia.storage import Repository
 
 
 class Beta11API(unittest.TestCase):
@@ -14,8 +14,8 @@ class Beta11API(unittest.TestCase):
         self.tmp=tempfile.TemporaryDirectory();self.addCleanup(self.tmp.cleanup)
         self.path=Path(self.tmp.name);(self.path/'config.json').write_text(json.dumps({'plex':{}}))
         self.repo=Repository(self.path)
-        p=patch('playlist_bridge.accounts.root_repository',return_value=self.repo);p.start();self.addCleanup(p.stop)
-        p=patch('playlist_bridge.config.CONFIG_FILE',self.path/'config.json');p.start();self.addCleanup(p.stop)
+        p=patch('harmonia.accounts.root_repository',return_value=self.repo);p.start();self.addCleanup(p.stop)
+        p=patch('harmonia.config.CONFIG_FILE',self.path/'config.json');p.start();self.addCleanup(p.stop)
         self.admin={'id':'1','name':'Owner','owner':True,'admin':True,'disabled':False,'verified_at':9999999999,'can_playlists':True,'plex_token':'OWNER_TOKEN'}
         self.member={'id':'2','name':'Member','admin':False,'disabled':False,'verified_at':9999999999,'can_playlists':True,'plex_token':'MEMBER_TOKEN'}
         for user in (self.admin,self.member):accounts.put('accounts',user['id'],user)
@@ -40,7 +40,10 @@ class Beta11API(unittest.TestCase):
 
     def key(self,user,replace=False):
         current=accounts.users()[user['id']]
-        return accounts.create_api_key(current,replace)['key']
+        token=accounts.create_api_key(current,replace)['key']
+        scopes=['read','playlists:write','requests:write']+(['webhooks:lidarr'] if current.get('admin') else [])
+        accounts.set_api_key_scopes(current,scopes)
+        return token
 
     def test_key_authentication_and_regeneration(self):
         first=self.key(self.member)
@@ -62,7 +65,7 @@ class Beta11API(unittest.TestCase):
             if url.endswith('/resources'):return resources
             if url.endswith('/library/sections'):return libraries
             raise AssertionError(url)
-        with patch('playlist_bridge.accounts.plex_json',side_effect=plex):accounts.verify('NEW_PLEX_TOKEN')
+        with patch('harmonia.accounts.plex_json',side_effect=plex):accounts.verify('NEW_PLEX_TOKEN')
         after=accounts.users()['1']
         self.assertEqual(after['api_key_hash'],before['api_key_hash'])
         self.assertEqual(asyncio.run(self.http('/api/v1/status',token=key))[0],200)
@@ -95,23 +98,24 @@ class Beta11API(unittest.TestCase):
         status,_=asyncio.run(self.http('/api/v1/webhooks/lidarr',method='POST',token=self.key(self.member),body={'eventType':'Test'}))
         self.assertEqual(status,403)
 
-    def test_catalog_webhooks_coalesce_into_one_quiet_period_job(self):
+    def test_catalog_webhooks_dispatch_first_then_hold_followup(self):
         token=self.key(self.admin)
         artist={'id':7,'name':'Artist'}
         first=asyncio.run(self.http('/api/v1/webhooks/lidarr',method='POST',token=token,body={'eventType':'ArtistAdd','artist':artist}))
         second=asyncio.run(self.http('/api/v1/webhooks/lidarr',method='POST',token=token,body={'eventType':'Rename','artist':artist,'album':{'id':42,'title':'Album'}}))
-        self.assertEqual(first[0],202);self.assertEqual(first[1]['job_id'],second[1]['job_id'])
+        self.assertEqual(first[0],202);self.assertNotEqual(first[1]['job_id'],second[1]['job_id'])
         active=jobs.Store(self.repo)._rows("SELECT * FROM jobs WHERE action='lidarr_webhook' AND status='queued'")
-        self.assertEqual(len(active),1);self.assertEqual(active[0]['payload']['event'],'catalog_batch')
+        self.assertEqual(len(active),2);self.assertTrue(all(job['payload']['event']=='catalog_batch' for job in active))
         batch=self.repo.load_one(api_v1.CATALOG_BATCH_NAMESPACE,api_v1.CATALOG_BATCH_KEY,{})
         self.assertEqual(batch['count'],2);self.assertEqual(batch['event_counts'],{'artistadd':1,'rename':1})
-        self.assertGreater(api_v1.catalog_batch_wait_seconds(self.repo,active[0]['payload']),0)
+        self.assertEqual(api_v1.catalog_batch_wait_seconds(self.repo,jobs.Store(self.repo).get(first[1]['job_id'])['payload']),0)
+        self.assertGreater(api_v1.catalog_batch_wait_seconds(self.repo,jobs.Store(self.repo).get(second[1]['job_id'])['payload']),0)
 
     def test_catalog_batch_scans_once_and_followup_only_scans_new_generation(self):
         token=self.key(self.admin)
         response=asyncio.run(self.http('/api/v1/webhooks/lidarr',method='POST',token=token,body={'eventType':'Rename','artist':{'id':7},'album':{'id':42}}))
         job=jobs.Store(self.repo).get(response[1]['job_id'])
-        with patch('playlist_bridge.lidarr_catalog.refresh',return_value={'summary':'Scoped refresh'}) as refresh,patch('playlist_bridge.inventory.scan',side_effect=AssertionError('Full scan forbidden')):
+        with patch('harmonia.lidarr_catalog.refresh',return_value={'summary':'Scoped refresh'}) as refresh,patch('harmonia.inventory.scan',side_effect=AssertionError('Full scan forbidden')):
             result=api_v1.execute_lidarr_webhook(job['payload'])
             self.assertEqual(refresh.call_count,1);self.assertIn('1 affected',result['summary'])
             self.assertEqual(refresh.call_args.args[1][0]['scope'],'album')
@@ -121,19 +125,19 @@ class Beta11API(unittest.TestCase):
             noop=api_v1.execute_lidarr_webhook(job['payload'])
             self.assertEqual(refresh.call_count,1);self.assertIn('No newer',noop['summary'])
 
-    def test_upgrade_cleanup_collapses_catalog_backlog_but_keeps_downloads(self):
+    def test_upgrade_cleanup_combines_catalog_and_download_backlog(self):
         store=jobs.Store(self.repo)
         rename=store.enqueue('lidarr_webhook',{'event':'rename','detail':{'artist_id':7},'trigger_label':'Lidarr webhook'})
         add=store.enqueue('lidarr_webhook',{'event':'artistadd','detail':{'artist_id':8},'trigger_label':'Lidarr webhook'})
         download=store.enqueue('lidarr_webhook',{'event':'download','detail':{'album_id':42},'trigger_label':'Lidarr webhook'})
         result=api_v1.coalesce_queued_lidarr_webhooks(self.repo)
-        self.assertEqual(result['collapsed'],2)
+        self.assertEqual(result['collapsed'],3)
         self.assertEqual(store.get(rename)['status'],'cancelled');self.assertEqual(store.get(add)['status'],'cancelled')
-        self.assertEqual(store.get(download)['status'],'queued')
+        self.assertEqual(store.get(download)['status'],'cancelled')
         batch=store.get(result['job_id']);self.assertEqual(batch['payload']['event'],'catalog_batch')
 
     def test_import_completions_share_one_quiet_period_batch(self):
-        from playlist_bridge.lidarr_downloads import queue_finalize,finalize_batch_wait_seconds,FINALIZE_BATCH_NAMESPACE,FINALIZE_BATCH_KEY
+        from harmonia.lidarr_downloads import queue_finalize,finalize_batch_wait_seconds,FINALIZE_BATCH_NAMESPACE,FINALIZE_BATCH_KEY
         first=queue_finalize(self.repo,'group-1',{'lidarr_id':41,'server':'server','track_file_count':10})
         second=queue_finalize(self.repo,'group-2',{'lidarr_id':42,'server':'server','track_file_count':12})
         self.assertEqual(first,second)
@@ -142,7 +146,7 @@ class Beta11API(unittest.TestCase):
         self.assertEqual(set(batch['albums']),{'group-1','group-2'});self.assertGreater(finalize_batch_wait_seconds(self.repo,row['payload']),0)
 
     def test_upgrade_cleanup_collapses_album_finalize_backlog(self):
-        from playlist_bridge.lidarr_downloads import coalesce_queued_album_finalizers
+        from harmonia.lidarr_downloads import coalesce_queued_album_finalizers
         store=jobs.Store(self.repo)
         old=[store.enqueue('album_finalize',{'album_id':f'group-{n}','lidarr_id':n,'server':'server'}) for n in range(1,5)]
         with self.repo.connect() as db:db.execute("UPDATE jobs SET status='running' WHERE id=?",(old[0],))
@@ -152,9 +156,9 @@ class Beta11API(unittest.TestCase):
         active=store.get(result['job_id']);self.assertEqual(active['status'],'queued');self.assertTrue(active['payload']['batch'])
 
     def test_album_finalize_batch_drains_each_album_once(self):
-        from playlist_bridge import album_finalize
-        from playlist_bridge.lidarr import state_put
-        from playlist_bridge.lidarr_downloads import FINALIZE_BATCH_NAMESPACE,FINALIZE_BATCH_KEY
+        from harmonia import album_finalize
+        from harmonia.lidarr import state_put
+        from harmonia.lidarr_downloads import FINALIZE_BATCH_NAMESPACE,FINALIZE_BATCH_KEY
         state_put(self.repo,FINALIZE_BATCH_NAMESPACE,FINALIZE_BATCH_KEY,{
             'generation':2,'processed_generation':0,'count':2,'last_received':0,
             'albums':{
@@ -162,7 +166,7 @@ class Beta11API(unittest.TestCase):
                 'group-2':{'album_id':'group-2','lidarr_id':42,'server':'server','generation':2},
             },
         })
-        with patch.object(album_finalize,'_execute',return_value={'pending':False}) as execute, patch('playlist_bridge.inventory.reconcile') as reconcile:
+        with patch.object(album_finalize,'_execute',return_value={'pending':False}) as execute, patch('harmonia.inventory.reconcile') as reconcile:
             result=album_finalize.execute_batch({'batch':True})
         self.assertEqual(execute.call_count,2);self.assertIn('Finalized 2 imported albums',result['summary'])
         reconcile.assert_called_once_with()

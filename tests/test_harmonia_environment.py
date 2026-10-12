@@ -16,9 +16,9 @@ class HarmoniaEnvironment(unittest.TestCase):
             script = '''
 import json
 from unittest.mock import patch
-from playlist_bridge import api, updates
-from playlist_bridge.runtime_paths import CONFIG_DIR
-from playlist_bridge.storage import get_repository
+from harmonia import api, updates
+from harmonia.runtime_paths import CONFIG_DIR
+from harmonia.storage import get_repository
 repository = get_repository(CONFIG_DIR)
 repository.save({'environment_test': {'retained': True}})
 with patch('uvicorn.run') as run:
@@ -37,4 +37,4 @@ with patch('uvicorn.run') as run:
             self.assertEqual(json.loads(result.stdout), {
                 'data': str(data.resolve()), 'channel': 'beta', 'port': 8184,
                 'proxies': '10.0.0.2', 'saved': {'retained': True}})
-            self.assertTrue((data / 'playlist-bridge.db').exists())
+            self.assertTrue((data / 'harmonia.db').exists())

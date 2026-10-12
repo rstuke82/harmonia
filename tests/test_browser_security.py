@@ -5,8 +5,8 @@ from unittest.mock import patch
 from starlette.requests import Request
 from starlette.responses import Response
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
-from playlist_bridge.browser_security import BrowserSecurity,CSP,https_only,secure_cookie,trusted_proxies
-from playlist_bridge import api
+from harmonia.browser_security import BrowserSecurity,CSP,https_only,secure_cookie,trusted_proxies
+from harmonia import api
 
 async def call(app,path='/api/private',scheme='http',client='198.51.100.4',headers=()):
     scope={'type':'http','asgi':{'version':'3.0'},'http_version':'1.1','method':'GET','scheme':scheme,'path':path,'raw_path':path.encode(),'query_string':b'','root_path':'','headers':[(b'host',b'test'),*headers],'client':(client,1234),'server':('test',80)}

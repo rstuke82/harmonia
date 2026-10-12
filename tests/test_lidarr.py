@@ -5,8 +5,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch, Mock
 from fastapi import FastAPI, HTTPException
-from playlist_bridge import lidarr, jobs
-from playlist_bridge.storage import Repository
+from harmonia import lidarr, jobs
+from harmonia.storage import Repository
 
 ALBUM = '11111111-1111-4111-8111-111111111111'
 ARTIST = '22222222-2222-4222-8222-222222222222'
@@ -76,7 +76,7 @@ class LidarrTests(unittest.TestCase):
         lidarr.register(app)
         endpoint = next(r.endpoint for r in app.routes if r.path == '/api/lidarr/search-existing')
         store = jobs.Store(self.repo)
-        with patch('playlist_bridge.api.job_store', return_value=store):
+        with patch('harmonia.api.job_store', return_value=store):
             first = endpoint(lidarr.ExistingSearch(album_id=ALBUM, source_title='Track', source_artist='Artist'))
             second = endpoint(lidarr.ExistingSearch(album_id=ALBUM, source_title='Other track', source_artist='Artist'))
         self.assertEqual(first['id'], second['id'])
@@ -154,7 +154,7 @@ class LidarrTests(unittest.TestCase):
         app = FastAPI()
         lidarr.register(app)
         endpoint = next(r.endpoint for r in app.routes if r.path == '/api/lidarr/add')
-        with patch('playlist_bridge.api.job_store', return_value=jobs.Store(self.repo)):
+        with patch('harmonia.api.job_store', return_value=jobs.Store(self.repo)):
             first = endpoint(lidarr.Confirm(preview_id=preview['preview_id']))
             second = endpoint(lidarr.Confirm(preview_id=preview['preview_id']))
         self.assertEqual(first['id'], second['id'])
@@ -187,7 +187,7 @@ class LidarrTests(unittest.TestCase):
             'releases': [{'release-group': {'id': ALBUM, 'title': 'Album', 'primary-type': 'Album'}}]}]}
         query = lidarr.Lookup(title='Track', artist='Artist', provider='musicbrainz')
         response.json.return_value['releases']=[{**r,'artist-credit':[{'name':'Artist'}]} for r in response.json.return_value['recordings'][0]['releases']]
-        with patch('playlist_bridge.musicbrainz_client._session.get', return_value=response) as get:
+        with patch('harmonia.musicbrainz_client._session.get', return_value=response) as get:
             result = lidarr.musicbrainz_search(self.repo, self.cfg, query)
             self.assertFalse(result['cached'])
             result = lidarr.musicbrainz_search(Repository(Path(self.tmp.name)), self.cfg, query)
@@ -214,7 +214,7 @@ class LidarrTests(unittest.TestCase):
     def test_running_search_wait_is_not_a_request_error(self):
         self.defaults['search_now'] = True
         _, payload = self.preview()
-        from playlist_bridge.lidarr_requests import server_id
+        from harmonia.lidarr_requests import server_id
         lidarr.state_put(self.repo, 'lidarr_requests', ALBUM, {'server':server_id(self.cfg),'status':'added'})
         def running(client, body, label, existing_id=None, accepted=None):
             accepted(42)
@@ -233,12 +233,12 @@ class LidarrTests(unittest.TestCase):
         self.assertEqual(payload['artwork'],'https://example.org/album.jpg')
         app=FastAPI();lidarr.register(app)
         endpoint=next(r.endpoint for r in app.routes if r.path=='/api/lidarr/add')
-        with patch('playlist_bridge.api.job_store',return_value=jobs.Store(self.repo)):
+        with patch('harmonia.api.job_store',return_value=jobs.Store(self.repo)):
             endpoint(lidarr.Confirm(preview_id=preview['preview_id']))
         self.assertEqual(lidarr.state_get(self.repo,'lidarr_requests',ALBUM)['artwork'],payload['artwork'])
 
     def test_empty_inventory_cover_does_not_erase_request_artwork(self):
-        from playlist_bridge import lidarr_requests
+        from harmonia import lidarr_requests
         lidarr.state_put(self.repo,'lidarr_requests',ALBUM,{
             'server':lidarr_requests.server_id(self.cfg),'status':'search_pending',
             'title':'Album','artist':'Artist','artwork':'https://example.org/album.jpg',
@@ -246,7 +246,7 @@ class LidarrTests(unittest.TestCase):
         self.repo.save({'inventory':{'lidarr':{'rows':[{'album_id':ALBUM,'title':'Album','artist':'Artist','artwork':''}]}}})
         app=FastAPI();lidarr_requests.register(app)
         endpoint=next(r.endpoint for r in app.routes if r.path=='/api/lidarr/requests')
-        with patch('playlist_bridge.accounts.users',return_value={}):
+        with patch('harmonia.accounts.users',return_value={}):
             row=endpoint.__wrapped__(compute_availability=False)[0]
         self.assertEqual(row['artwork'],'https://example.org/album.jpg')
         self.assertEqual(row['error'],'')
@@ -269,11 +269,11 @@ class LidarrTests(unittest.TestCase):
         self.assertEqual(sum(c[:2]==('POST','album') for c in self.client.calls),1)
 
     def test_album_request_deduplicates_across_tracks(self):
-        from playlist_bridge.lidarr_requests import register, server_id
+        from harmonia.lidarr_requests import register, server_id
         app=FastAPI();lidarr.register(app);register(app)
         add=next(r.endpoint for r in app.routes if r.path=='/api/lidarr/add')
         retry=next(r.endpoint for r in app.routes if r.path=='/api/lidarr/requests/{album}/retry-search')
-        with patch('playlist_bridge.api.job_store',return_value=jobs.Store(self.repo)):
+        with patch('harmonia.api.job_store',return_value=jobs.Store(self.repo)):
             first,_=self.preview()
             j1=add(lidarr.Confirm(preview_id=first['preview_id'],source_title='One',source_artist='Artist'))
             second,_=self.preview()
@@ -282,7 +282,7 @@ class LidarrTests(unittest.TestCase):
             record=lidarr.state_get(self.repo,'lidarr_requests',ALBUM)
             self.assertEqual(len(record['sources']),2)
             jobs.Store(self.repo).update(j1['id'],status='completed')
-            from playlist_bridge.lidarr_requests import save
+            from harmonia.lidarr_requests import save
             save(self.repo,ALBUM,lidarr_id=7,status='search_failed')
             retried=retry(ALBUM)
             again=retry(ALBUM)

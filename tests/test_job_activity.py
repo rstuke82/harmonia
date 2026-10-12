@@ -3,8 +3,8 @@ import unittest
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
-from playlist_bridge import jobs
-from playlist_bridge.storage import Repository
+from harmonia import jobs
+from harmonia.storage import Repository
 
 class ActivityProgress(unittest.TestCase):
     def test_retarget_refreshes_index_and_clears_previous_progress(self):

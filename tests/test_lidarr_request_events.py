@@ -1,10 +1,10 @@
 import tempfile
 import unittest
 from pathlib import Path
-from playlist_bridge.storage import Repository
-from playlist_bridge.lidarr_requests import server_id
-from playlist_bridge.lidarr_request_events import update, preserve_failure
-from playlist_bridge.api_v1 import _queue_lidarr_event
+from harmonia.storage import Repository
+from harmonia.lidarr_requests import server_id
+from harmonia.lidarr_request_events import update, preserve_failure
+from harmonia.api_v1 import _queue_lidarr_event
 
 class RequestEvents(unittest.TestCase):
     def setUp(self):
@@ -35,7 +35,7 @@ class RequestEvents(unittest.TestCase):
         self.assertTrue(self.row()['webhook_failure'])
         self.assertIsNone(preserve_failure(self.row(),[{'download_id':'B','error':''}],False,'Downloading','')[2])
     def test_available_and_imported_requests_are_not_downgraded(self):
-        from playlist_bridge.lidarr_requests import save
+        from harmonia.lidarr_requests import save
         save(self.repo,'one',download_status='Imported into Lidarr')
         self.assertEqual(self.event('DownloadFailed')['updated'],0)
         save(self.repo,'one',download_status='Waiting for download',plex_available=True)
@@ -50,7 +50,7 @@ class RequestEvents(unittest.TestCase):
         self.assertEqual(preserve_failure(row,[],True,'Imported into Lidarr',''),('Imported into Lidarr','',None))
 
     def test_poll_started_before_webhook_cannot_overwrite_it(self):
-        from playlist_bridge.lidarr_requests import save
+        from harmonia.lidarr_requests import save
         old_event=self.row().get('webhook_checked_at')
         self.event('ImportFailed')
         self.assertFalse(save(self.repo,'one',_expected_webhook_at=old_event,download_status='Waiting for download',download_error=''))
@@ -67,8 +67,8 @@ class RequestEvents(unittest.TestCase):
         self.assertIsNotNone(preserve_failure(row,[{'download_id':'A','error':''}],False,'Downloading','')[2])
 
     def test_queue_retry_advances_identity_and_rejects_delayed_failure(self):
-        from playlist_bridge.lidarr_request_events import retry_identity_changes
-        from playlist_bridge.lidarr_requests import save
+        from harmonia.lidarr_request_events import retry_identity_changes
+        from harmonia.lidarr_requests import save
         self.event('Grab','A');self.event('ImportFailed','A')
         row=self.row();matches=[{'download_id':'B','error':''}]
         status,error,failure=preserve_failure(row,matches,False,'Downloading','')

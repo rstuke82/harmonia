@@ -1,16 +1,17 @@
+from library_fixtures import library_targets,model_from_inventory
 import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
-from playlist_bridge import accounts,api,discover,history_links
-from playlist_bridge.storage import Repository
+from harmonia import accounts,api,discover,history_links
+from harmonia.storage import Repository
 
 class HistoryRequestTests(unittest.TestCase):
     def setUp(self):
         self.tmp=tempfile.TemporaryDirectory();self.addCleanup(self.tmp.cleanup)
         self.repo=Repository(Path(self.tmp.name))
-        for target in ('playlist_bridge.accounts.root_repository','playlist_bridge.discover.root_repository'):
+        for target in ('harmonia.accounts.root_repository','harmonia.discover.root_repository'):
             p=patch(target,return_value=self.repo);p.start();self.addCleanup(p.stop)
         self.source=history_links.HistorySource(history_key='a'*64,artist='Performer',album='Compilation (Deluxe)')
         self.album='12345678-1234-1234-1234-123456789abc'
@@ -22,7 +23,7 @@ class HistoryRequestTests(unittest.TestCase):
         inventory={'lidarr':{'rows':[{'album_id':self.album,'statistics':{'trackFileCount':files}}] if present else []}}
         self.repo.save({'inventory':inventory})
         fn=next(r.endpoint for r in api.app.routes if getattr(r,'path','')=='/api/discover/history-gaps').__wrapped__
-        with patch('playlist_bridge.user_preferences.preferences',return_value={'lastfm_username':'user'}),patch.object(discover,'cached_history_tracks',return_value=([],False,True)),patch.object(discover,'recent_album_rows',return_value=[row]),patch.object(discover,'lastfm_settings',return_value={'history_min_plays':1,'history_sort':'plays','history_max_suggestions':25,'history_days':0}),patch.object(discover,'availability',side_effect=lambda rows:[r|{'lidarr_album_id':self.album,'statistics':{'trackFileCount':files},'availability':'Awaiting Plex' if files else 'Requested'} for r in rows]):
+        with patch('harmonia.library.cached_library',return_value=model_from_inventory(inventory)),patch('harmonia.user_preferences.preferences',return_value={'lastfm_username':'user'}),patch.object(discover,'cached_history_tracks',return_value=([],False,True)),patch.object(discover,'recent_album_rows',return_value=[row]),patch.object(discover,'lastfm_settings',return_value={'history_min_plays':1,'history_sort':'plays','history_max_suggestions':25,'history_days':0}),patch.object(discover,'availability',side_effect=lambda rows:[r|{'lidarr_album_id':self.album,'statistics':{'trackFileCount':files},'availability':'Awaiting Plex' if files else 'Requested'} for r in rows]):
             return fn()['rows']
 
     def test_request_keeps_waiting_album_then_hides_imported_without_plex(self):
@@ -53,17 +54,42 @@ class HistoryRequestTests(unittest.TestCase):
         album={'album_id':self.album,'id':7,'title':'Album','artist':'Artist','statistics':{'trackFileCount':1}}
         tracks=[{'album_id':self.album,'title':'Song'}]
         inventory={'lidarr':{'rows':[album],'tracks':tracks},'plex':{'rows':[]}}
-        candidate=discover._history_candidates(inventory,row)[0]
+        candidate=discover._history_candidates(library_targets(inventory),row)[0]
         evidence=discover._history_match_evidence(row,'Album','Artist',tracks)
         self.assertEqual(candidate['score'],evidence['score'])
         self.assertEqual(candidate['score'],100)
         self.assertTrue(candidate['accepted'])
         self.assertIsNotNone(discover._best_history_match(row,[{'title':'Album','artist':'Artist','tracks':tracks,'album':album}]))
 
+    def test_numbered_anniversary_matches_the_base_album_in_picker_and_history(self):
+        row={'album':'The Reason (20th Anniversary)','artist':'Hoobastank','tracks':['The Reason']}
+        album={'album_id':self.album,'title':'The Reason','artist':'Hoobastank','statistics':{'trackFileCount':1}}
+        tracks=[{'album_id':self.album,'title':'The Reason'}]
+        inventory={'lidarr':{'rows':[album],'tracks':tracks},'plex':{'rows':[]}}
+        candidate=discover._history_candidates(library_targets(inventory),row)[0]
+        self.assertEqual(candidate['score'],100)
+        self.assertTrue(candidate['accepted'])
+        self.assertIsNotNone(discover._best_history_match(row,[{**album,'tracks':tracks}]))
+        from harmonia.lidarr import _discovery_title
+        for title in ('The Reason (20th Anniversary)','The Reason [20 Anniversary Edition]','The Reason - 20th Anniversary Edition'):
+            self.assertEqual(_discovery_title(title),'The Reason')
+
+    def test_numbered_anniversary_keeps_wrong_artist_and_recording_versions_distinct(self):
+        row={'album':'The Reason (20th Anniversary)','artist':'Hoobastank','tracks':['The Reason']}
+        wrong=discover._history_match_evidence(row,'The Reason','Unrelated Artist',[{'title':'Different song'}])
+        self.assertFalse(wrong['accepted'])
+        for title in ('The Reason (Live)','The Reason (Remixes)'):
+            self.assertNotEqual(discover._canonical_album(title),discover._canonical_album(row['album']))
+
+    def test_numbered_anniversary_does_not_auto_resolve_two_equivalent_albums(self):
+        row={'album':'The Reason (20th Anniversary)','artist':'Hoobastank','tracks':['The Reason']}
+        candidates=[{'title':title,'artist':'Hoobastank','tracks':[{'title':'The Reason'}]} for title in ('The Reason','The Reason (Deluxe Edition)')]
+        self.assertIsNone(discover._best_history_match(row,candidates))
+
     def test_same_title_unrelated_artist_does_not_confirm_without_track_evidence(self):
         row={'album':'Greatest Hits','artist':'Artist One','tracks':['One']}
         inventory={'lidarr':{'rows':[{'album_id':self.album,'title':'Greatest Hits','artist':'Artist Two','statistics':{'trackFileCount':20}}],'tracks':[{'album_id':self.album,'title':'Other'}]},'plex':{'rows':[]}}
-        candidate=discover._history_candidates(inventory,row)[0]
+        candidate=discover._history_candidates(library_targets(inventory),row)[0]
         self.assertFalse(candidate['accepted'])
         self.assertLess(candidate['score'],100)
 
@@ -71,7 +97,7 @@ class HistoryRequestTests(unittest.TestCase):
         route=next(r.endpoint for r in api.app.routes if getattr(r,'path','')=='/api/requests-user/add')
         model=route.__annotations__['body']
         body=model(album_id=self.album,title='Chosen album',artist='Album artist',history_source=self.source)
-        with accounts.as_user(self.member),patch('playlist_bridge.lidarr.prepare',side_effect=ValueError('preview failed')):
+        with accounts.as_user(self.member),patch('harmonia.lidarr.prepare',side_effect=ValueError('preview failed')):
             with self.assertRaises(ValueError):route(body)
             self.assertEqual(accounts.personal_repository().load('lastfm_history_links'),{})
         with accounts.as_user(self.member|{'auto_approve':False}):
@@ -85,7 +111,7 @@ class HistoryRequestTests(unittest.TestCase):
         route=next(r.endpoint for r in api.app.routes if getattr(r,'path','')=='/api/requests-user/add')
         body=route.__annotations__['body'](album_id=self.album,title='Chosen title',artist='Album artist',history_source=self.source)
         add_route=next(r for r in api.app.routes if getattr(r,'path','')=='/api/lidarr/add')
-        with accounts.as_user(self.member),patch('playlist_bridge.lidarr.prepare',return_value={'preview_id':'12345678-1234-1234-1234-123456789abc'}),patch.object(add_route,'endpoint',return_value={'id':'queued-job'}):
+        with accounts.as_user(self.member),patch('harmonia.lidarr.prepare',return_value={'preview_id':'12345678-1234-1234-1234-123456789abc'}),patch.object(add_route,'endpoint',return_value={'id':'queued-job'}):
             route(body)
             saved=accounts.personal_repository().load('lastfm_history_links')[self.source.history_key]
         self.assertEqual(saved['target_id'],self.album)
@@ -99,7 +125,7 @@ class HistoryRequestTests(unittest.TestCase):
         plex={'rows':[],'checked_at':time.time()}
         lidarr={'rows':[album],'tracks':[{'id':'track','album_id':self.album,'title':'Song'}],'checked_at':time.time()}
         config=SimpleNamespace(repository=self.repo)
-        with patch('playlist_bridge.config.Config',return_value=config),patch('playlist_bridge.inventory.current',return_value=(plex,lidarr)),patch('playlist_bridge.track_bridge.context',return_value=None),patch('playlist_bridge.user_preferences.preferences',return_value={}),patch('playlist_bridge.user_preferences.blocked',return_value=False):
+        with patch('harmonia.config.Config',return_value=config),patch('harmonia.inventory.current',return_value=(plex,lidarr)),patch('harmonia.track_bridge.context',return_value=None),patch('harmonia.user_preferences.preferences',return_value={}),patch('harmonia.user_preferences.blocked',return_value=False):
             result=discover.availability([row])[0]
         self.assertEqual(result['lidarr_album_id'],self.album)
         self.assertFalse(result['plex_present'])
@@ -108,7 +134,7 @@ class HistoryRequestTests(unittest.TestCase):
     def test_admin_add_persists_history_source_after_real_queue_insert(self):
         import time
         import uuid
-        from playlist_bridge import lidarr
+        from harmonia import lidarr
         preview_id=str(uuid.uuid4());cfg=lidarr.config(self.repo)
         self.repo.save({'lidarr_previews':{preview_id:{'at':time.time(),'config_hash':lidarr.fingerprint(cfg),'album_id':self.album,'title':'Selected edition','artist':'Various Artists'}}})
         route=next(r.endpoint for r in api.app.routes if getattr(r,'path','')=='/api/lidarr/add')
@@ -120,7 +146,7 @@ class HistoryRequestTests(unittest.TestCase):
         self.assertEqual(saved['job_id'],job['id'])
 
     def test_admin_search_existing_also_saves_history_identity(self):
-        from playlist_bridge import lidarr
+        from harmonia import lidarr
         from unittest.mock import Mock
         route=next(r.endpoint for r in api.app.routes if getattr(r,'path','')=='/api/lidarr/search-existing')
         client=Mock();client.call.return_value=[{'id':7,'foreignAlbumId':self.album,'title':'Selected edition','artist':{'artistName':'Album Artist'}}]

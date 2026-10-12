@@ -3,8 +3,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import Mock,patch
 
-from playlist_bridge import fanart
-from playlist_bridge.storage import Repository
+from harmonia import fanart
+from harmonia.storage import Repository
 
 
 class FanartTests(unittest.TestCase):
@@ -12,7 +12,7 @@ class FanartTests(unittest.TestCase):
     def setUp(self):
         self.tmp=tempfile.TemporaryDirectory();self.addCleanup(self.tmp.cleanup)
         self.repo=Repository(Path(self.tmp.name))
-        from playlist_bridge.lidarr import state_put
+        from harmonia.lidarr import state_put
         state_put(self.repo,'fanart','settings',{'api_key':'project-secret','client_key':'personal-secret'})
 
     def test_artist_lookup_uses_direct_api_and_keeps_keys_in_headers(self):
@@ -35,7 +35,7 @@ class FanartTests(unittest.TestCase):
         self.assertEqual(get.call_count,1)
 
     def test_lidarr_artwork_order_migrates_to_direct_fanart(self):
-        from playlist_bridge.metadata_sources import Preferences
+        from harmonia.metadata_sources import Preferences
         value=Preferences(source_order={'artist_portrait':['apple','lidarr','plex'],'artist_hero':['lidarr','plex'],'album_artwork':['lidarr','coverartarchive']})
         self.assertEqual(value.source_order['artist_portrait'],['apple','fanart','plex'])
         self.assertEqual(value.source_order['artist_hero'],['fanart','plex'])

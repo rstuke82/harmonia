@@ -1,7 +1,7 @@
 import time
 import unittest
 from unittest.mock import Mock
-from playlist_bridge.file_audit import rename_previews,report
+from harmonia.file_audit import rename_previews,report
 
 class RenamePreview(unittest.TestCase):
     def setUp(self):

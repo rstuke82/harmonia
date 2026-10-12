@@ -17,6 +17,5 @@ export function currentJobLanes(job?:Job){
 }
 
 export function activityBadgeCount(jobs:Job[]){
- const running=jobs.filter(j=>!['prepare_views','request_status'].includes(j.action)&&['running','cancelling'].includes(j.status))
- return running.length>1||running.some(j=>['sync','match_batch'].includes(j.action))?running.length:0
+ return jobs.filter(j=>!['prepare_views','request_status'].includes(j.action)&&j.status==='queued').length
 }

@@ -7,10 +7,10 @@ from types import SimpleNamespace
 from unittest.mock import patch
 from zipfile import ZipFile
 from fastapi import HTTPException
-from playlist_bridge import accounts,api,reset_guard,factory_reset
-from playlist_bridge.storage import Repository
-from playlist_bridge.jobs import Store
-from playlist_bridge.playlist_overlays import Edit,entries,apply
+from harmonia import accounts,api,reset_guard,factory_reset
+from harmonia.storage import Repository
+from harmonia.jobs import Store
+from harmonia.playlist_overlays import Edit,entries,apply
 import test_beta11 as fixtures
 
 def endpoint(path,method):
@@ -99,7 +99,7 @@ class FactoryReset(unittest.TestCase):
             self.assertFalse((repo.directory/'plex-image-cache').exists())
         self.assertEqual(media.read_bytes(),b'user media')
         with ZipFile(self.repo.directory/'backups'/result['backup']) as z:
-            self.assertIn('users/'+member.directory.name+'/playlist-bridge.db',z.namelist())
+            self.assertIn('users/'+member.directory.name+'/harmonia.db',z.namelist())
         self.assertTrue(reset_guard.restart_required)
     def test_disabled_member_jobs_and_jobs_beyond_list_limit_block_reset(self):
         member=self.personal();Store(member).enqueue('sync',{})
@@ -115,7 +115,7 @@ class FactoryReset(unittest.TestCase):
     def test_http_barrier_and_restart_recovery(self):
         member=self.personal();member.save({'runtime':{'playlists':[{'name':'Old'}]}})
         self.addCleanup(self.clean_guard)
-        with patch('playlist_bridge.factory_reset.finish',side_effect=OSError('Interrupted')):
+        with patch('harmonia.factory_reset.finish',side_effect=OSError('Interrupted')):
             with self.assertRaises(OSError):self.reset()
         self.assertTrue((self.repo.directory/factory_reset.MARKER).exists())
         self.assertFalse(reset_guard.enter_request())
@@ -130,7 +130,7 @@ class FactoryReset(unittest.TestCase):
         with self.assertRaises(HTTPException):factory_reset.execute(self.repo,SimpleNamespace(workers=[{'thread':SimpleNamespace(is_alive=lambda:True)}]))
     def test_failed_backup_does_not_clear_data(self):
         member=self.personal();member.save({'runtime':{'playlists':[{'name':'Keep'}]}})
-        with patch('playlist_bridge.backups.create',side_effect=OSError('Disk full')):
+        with patch('harmonia.backups.create',side_effect=OSError('Disk full')):
             with self.assertRaises(OSError):self.reset()
         self.assertEqual(member.load('runtime')['playlists'][0]['name'],'Keep')
     def test_http_reset_blocks_subsequent_api_until_restart(self):

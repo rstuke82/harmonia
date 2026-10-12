@@ -1,10 +1,10 @@
 import tempfile
 import unittest
 from pathlib import Path
-from playlist_bridge.storage import Repository
-from playlist_bridge.playlist_overlays import apply,entries
-from playlist_bridge.apple_music_source import AppleMusicAPI
-from playlist_bridge.sync_engine import Syncer
+from harmonia.storage import Repository
+from harmonia.playlist_overlays import apply,entries
+from harmonia.apple_music_source import AppleMusicAPI
+from harmonia.sync_engine import Syncer
 
 class SourceMetadataThroughOverlays(unittest.TestCase):
     def setUp(self):

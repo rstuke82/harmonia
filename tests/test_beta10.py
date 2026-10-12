@@ -1,15 +1,15 @@
 import tempfile,time,unittest
 from pathlib import Path
 from unittest.mock import patch
-from playlist_bridge.storage import Repository
-from playlist_bridge.lidarr import state_put
-from playlist_bridge import playlist_overlays
-from playlist_bridge.source_observations import validate
-from playlist_bridge.file_audit import inspect,upgrade_reason,match_review_reason
-from playlist_bridge.file_tools import Settings
-from playlist_bridge.matching import Matcher
-from playlist_bridge.api import _has_pending_playlist_changes
-from playlist_bridge.metadata_sources import spotify_relations
+from harmonia.storage import Repository
+from harmonia.lidarr import state_put
+from harmonia import playlist_overlays
+from harmonia.source_observations import validate
+from harmonia.file_audit import inspect,upgrade_reason,match_review_reason
+from harmonia.file_tools import Settings
+from harmonia.matching import Matcher
+from harmonia.api import _has_pending_playlist_changes
+from harmonia.metadata_sources import spotify_relations
 
 class Beta10(unittest.TestCase):
  def setUp(self):
@@ -44,7 +44,7 @@ class Beta10(unittest.TestCase):
   root=(Path(self.tmp.name)/'music');root.mkdir();root=root.resolve();path=root/'01 Song.mp3';path.write_bytes(b'x')
   cfg=Settings(audit_enabled=True,mappings=[{'lidarr_path':'/lidarr','local_path':str(root)}]).model_dump()
   inv={'identity':'x','checked_at':time.time(),'tracks':[{'id':'7','recording_id':'mbid','title':'Song','file':'/lidarr/01 Song.mp3'}]}
-  with patch('playlist_bridge.local_library.read_tags',return_value={'title':'Song','recording_id':'mbid','codec':'MP3','format':'MP3','bitrate':320000}):first=inspect(cfg,inv,{},None)
+  with patch('harmonia.local_library.read_tags',return_value={'title':'Song','recording_id':'mbid','codec':'MP3','format':'MP3','bitrate':320000}):first=inspect(cfg,inv,{},None)
   path.unlink();second=inspect(cfg,inv,{},first)
   waiting=[r for r in second['issues'] if r['issue']=='Upgrade candidate']
   self.assertEqual(waiting[0]['evidence']['status'],'Missing — awaiting upgraded file')
@@ -52,7 +52,7 @@ class Beta10(unittest.TestCase):
   root=(Path(self.tmp.name)/'aac');root.mkdir();root=root.resolve();path=root/'01 Song.m4a';path.write_bytes(b'x')
   cfg=Settings(audit_enabled=True,mappings=[{'lidarr_path':'/lidarr','local_path':str(root)}]).model_dump()
   inv={'identity':'x','checked_at':time.time(),'tracks':[{'id':'7','recording_id':'mbid','title':'Song','file':'/lidarr/01 Song.m4a'}]}
-  with patch('playlist_bridge.local_library.read_tags',return_value={'title':'Song','recording_id':'mbid','codec':'AAC','format':'AAC','bitrate':326000}):result=inspect(cfg,inv,{},None)
+  with patch('harmonia.local_library.read_tags',return_value={'title':'Song','recording_id':'mbid','codec':'AAC','format':'AAC','bitrate':326000}):result=inspect(cfg,inv,{},None)
   self.assertFalse(any(r['issue']=='Upgrade candidate' for r in result['issues']))
   self.assertFalse(any(r['issue']=='iTunes Match review' for r in result['issues']))
  def test_structured_contributor_can_match_when_album_agrees(self):

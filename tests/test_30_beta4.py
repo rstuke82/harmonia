@@ -1,13 +1,13 @@
-from playlist_bridge.sync_engine import Syncer
-from playlist_bridge.matching import Matcher
-from playlist_bridge.config import Config
+from harmonia.sync_engine import Syncer
+from harmonia.matching import Matcher
+from harmonia.config import Config
 import asyncio,json,time
 from unittest.mock import patch
 from test_30 import MultiUser
-from playlist_bridge import accounts, api
-from playlist_bridge.text_playlists import parse,Source,TextSource
-from playlist_bridge.track_bridge import links,match,_context
-from playlist_bridge.lidarr import state_put
+from harmonia import accounts, api
+from harmonia.text_playlists import parse,Source,TextSource
+from harmonia.track_bridge import links,match,_context
+from harmonia.lidarr import state_put
 
 class Beta4(MultiUser):
     def test_text_parser_order_and_review(self):
@@ -37,7 +37,7 @@ class Beta4(MultiUser):
             self.assertIsNone(match(Matcher,source,[]))
         finally:_context.reset(token)
     def test_text_registration_without_playable_tracks_survives(self):
-        from playlist_bridge.text_playlists import execute
+        from harmonia.text_playlists import execute
         with accounts.as_user(self.a),patch.object(api,'execute_job',return_value={'summary':'queued'}) as sync:
             execute({'name':'New list','tracks':[{'title':'Missing','artist':'Artist'}]})
             c=Config();self.assertEqual(c.config['playlists'][0]['source'],'text')
@@ -47,7 +47,7 @@ class Beta4(MultiUser):
             self.assertEqual(sync.call_args.args[0],'sync')
     def test_text_sync_without_matches_never_touches_plex(self):
         from unittest.mock import Mock
-        from playlist_bridge.text_playlists import execute
+        from harmonia.text_playlists import execute
         with accounts.as_user(self.a),patch.object(api,'execute_job',return_value={}):
             execute({'name':'Waiting','tracks':[{'title':'Song','artist':'Artist'}]})
             c=Config();p=c.config['playlists'][0];syncer=Syncer(c)

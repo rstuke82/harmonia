@@ -7,7 +7,8 @@ import { Icon } from './Controls'
 import { displayText } from './labels'
 import { stamp } from './HealthCard'
 
-export const actionName=(value:string)=>({musicbrainz_lookup:'Find Albums with MusicBrainz',prepare_views:'Prepare Page Data',file_audit:'Scan Local Files',file_audit_duplicates:'Verify Duplicate Files',library_metadata:'Refresh Artist Metadata',library_metadata_all:'Refresh Library Metadata',artist_metadata:'Refresh Artist Metadata',local_catalog:'Refresh MusicBrainz Catalog',local_scan:'Scan Local Files',text_playlist:'Add Text Playlist',recreate:'Recreate Plex Playlist',plex_scan:'Scan Plex Library',lidarr_scan:'Scan Lidarr Library',lidarr_webhook:'Process Lidarr Event',album_finalize:'Finalize Imported Album',release_change:'Change Album Release',reconcile:'Reconcile Availability',retry_missing:'Retry Missing Matches',playlist_settings:'Update Playlist Settings',availability:'Check Media Availability',ignore_batch:'Ignore tracks',match_batch:'Apply Match Queue',lidarr_add:'Request Album',lidarr_search:'Retry Lidarr Search',playlist_description:'Update Playlist Description',sync:'Sync',health:'Health Check',analyze:'Analyze playlist',add:'Add playlist',fix_match:'Fix Match',track_match:'Update track matches',remove:'Remove playlists',backup:'Backup',check_updates:'Check for Updates',restore_backup:'Restore Backup',database_optimize:'Optimize Database',database_compact:'Compact Database',database_cleanup:'Clean Database History',database_rebuild:'Rebuild Derived Data',ignore:'Ignore track',startup:'Startup',jobs:'Jobs'}[value]||value)
+export {actionName} from './jobLabels'
+import {actionName} from './jobLabels'
 export function showActivity(id:string){location.hash=`activity/${encodeURIComponent(id)}`}
 export function newestActive(jobs:Job[]){
  const priority=(job:Job)=>job.status==='running'||job.status==='cancelling'?2:job.status==='queued'?1:0

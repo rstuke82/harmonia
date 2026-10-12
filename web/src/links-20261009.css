@@ -15,3 +15,5 @@
 .sync-notice{position:fixed;z-index:45;right:24px;bottom:24px;display:flex;align-items:flex-start;gap:12px;max-width:min(440px,calc(100vw - 32px));padding:16px;border:1px solid var(--glass-edge,var(--border));border-radius:18px;background:var(--glass,var(--surface-solid));backdrop-filter:blur(24px);box-shadow:var(--glass-shadow,var(--shadow));color:var(--text)}.sync-notice p{margin:0}.sync-notice p strong,.sync-notice small{display:block}.sync-notice small{margin:4px 0;color:var(--muted);font-size:12px}.sync-notice a{display:inline-block;margin-top:7px;font-size:13px}.sync-notice .icon-button{width:30px;height:30px;min-height:30px;padding:0;flex-shrink:0}.sync-notice-check{display:grid;place-items:center;width:28px;height:28px;border-radius:50%;color:var(--success);background:color-mix(in srgb,var(--success) 14%,transparent);flex-shrink:0}@media(max-width:900px){.sync-notice{right:16px;left:16px;bottom:calc(96px + env(safe-area-inset-bottom));max-width:none}.sync-notice>div{flex:1}}
 
 .terminal-output{scroll-behavior:auto;overflow-anchor:none}.terminal-lines{min-width:0}
+
+.activity-nav .nav-count.queued-count{background:#b7790a;color:#fff}

@@ -5,8 +5,8 @@ from types import SimpleNamespace
 from unittest.mock import patch
 import test_30 as auth_tests
 import test_build_20261007_14 as library_tests
-from playlist_bridge import accounts,api,library,saved_views
-from playlist_bridge.jobs import Store
+from harmonia import accounts,api,library,saved_views
+from harmonia.jobs import Store
 
 class MemberAccess(auth_tests.MultiUser):
     def call(self,path,method='GET',user=None,body=None):
@@ -23,7 +23,7 @@ class MemberAccess(auth_tests.MultiUser):
         status,data=self.call('/api/library/issues');self.assertEqual(status,202)
         with accounts.as_user(self.a):repo=accounts.personal_repository()
         job=Store(repo).get(data['job_id'])
-        with patch('playlist_bridge.jobs.current',return_value=SimpleNamespace(store=Store(repo),id=job['id'],action='prepare_views')),patch('playlist_bridge.jobs.progress'):
+        with patch('harmonia.jobs.current',return_value=SimpleNamespace(store=Store(repo),id=job['id'],action='prepare_views')),patch('harmonia.jobs.progress'):
             saved_views.execute(job['payload'])
         status,_=self.call('/api/library/issues');self.assertEqual(status,200)
         self.a['can_library_issues']=False;accounts.put('accounts',self.a['id'],self.a)
@@ -42,7 +42,7 @@ class MemberAccess(auth_tests.MultiUser):
         self.assertEqual([r['key'] for r in rows],['mine'])
         self.assertEqual(rows[0]['requesters'],[{'user_id':'11','name':'Alice'}])
         self.assertEqual(rows[0]['sources'],[])
-        with patch('playlist_bridge.lidarr_downloads.perform',return_value={'ok':True}) as perform:
+        with patch('harmonia.lidarr_downloads.perform',return_value={'ok':True}) as perform:
             status,_=self.call('/api/requests-user/other/download-action','POST',body={'action':'search'})
             self.assertEqual(status,403);perform.assert_not_called()
             status,_=self.call('/api/requests-user/mine/download-action','POST',body={'action':'search'})
@@ -86,7 +86,7 @@ class LibraryAccess(library_tests.AlbumReads):
         directory_app=__import__('fastapi').FastAPI();library.register(directory_app)
         directory=next(r.endpoint for r in directory_app.routes if r.path=='/api/library')
         # The disabled integration must ignore its older saved catalog.
-        with patch('playlist_bridge.lidarr.config',return_value={'enabled':False,'url':'http://lidarr'}),accounts.as_user(self.user):
+        with patch('harmonia.lidarr.config',return_value={'enabled':False,'url':'http://lidarr'}),accounts.as_user(self.user):
             data=self.prepare(directory)
             self.assertEqual(data['rows'][0]['album_id'],'plex:pal')
             self.assertEqual(data['artists'][0]['name'],'Artist');self.assertEqual(len(data['rows']),1)

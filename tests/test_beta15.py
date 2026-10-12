@@ -3,10 +3,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from playlist_bridge.database_maintenance import clear_cache,status
-from playlist_bridge.discover import recent_album_rows
-from playlist_bridge.fanart import artist_images
-from playlist_bridge.storage import Repository
+from harmonia.database_maintenance import clear_cache,status
+from harmonia.discover import recent_album_rows
+from harmonia.fanart import artist_images
+from harmonia.storage import Repository
 
 
 class Beta15Tests(unittest.TestCase):

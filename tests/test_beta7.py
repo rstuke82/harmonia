@@ -2,10 +2,10 @@ import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
-from playlist_bridge.jobs import Store,wait_reason,worker_for
-from playlist_bridge.storage import Repository
-from playlist_bridge.file_tools import mapped,Settings
-from playlist_bridge.library import issues
+from harmonia.jobs import Store,wait_reason,worker_for
+from harmonia.storage import Repository
+from harmonia.file_tools import mapped,Settings
+from harmonia.library import issues
 
 class Beta7(unittest.TestCase):
     def test_expensive_metadata_and_scans_wait_for_health(self):
@@ -40,7 +40,7 @@ class Beta7(unittest.TestCase):
     def test_duplicate_findings_are_not_destructive(self):
         plex={'rows':[{'plex_id':'10','files':['/a.flac'],'title':'Song'},{'plex_id':'11','files':['/a.flac'],'title':'Song'}]}
         ts=[{'id':'1','title':'Song','file':'/a.flac','recording_id':'r','album_id':'a'},{'id':'2','title':'Song','file':'/b.flac','recording_id':'r','album_id':'a'}]
-        with patch('playlist_bridge.file_tools.settings',return_value={'mappings':[]}):rows=issues({'tracks':ts,'links':{},'pending':True},plex)
+        with patch('harmonia.file_tools.settings',return_value={'mappings':[]}):rows=issues({'tracks':ts,'links':{},'pending':True},plex)
         kinds={r['issue'] for r in rows}
         self.assertIn('Duplicate Plex entries',kinds)
         self.assertIn('Possible duplicate files',kinds)

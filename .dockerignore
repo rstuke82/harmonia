@@ -4,8 +4,8 @@
 !LICENSE
 !scripts/
 !scripts/container_entrypoint.py
-!playlist_bridge/
-!playlist_bridge/*.py
+!harmonia/
+!harmonia/*.py
 !web/
 !web/package.json
 !web/package-lock.json

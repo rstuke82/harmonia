@@ -3,17 +3,17 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 from fastapi import FastAPI
-from playlist_bridge import accounts,discover,user_preferences,saved_views
-from playlist_bridge.storage import Repository
+from harmonia import accounts,discover,user_preferences,saved_views
+from harmonia.storage import Repository
 
 class HistoryExclusions(unittest.TestCase):
     def setUp(self):
         tmp=tempfile.TemporaryDirectory();self.addCleanup(tmp.cleanup)
         self.repo=Repository(Path(tmp.name));self.other=Repository(Path(tmp.name)/'other')
-        for target in ['playlist_bridge.discover.root_repository','playlist_bridge.accounts.root_repository']:
+        for target in ['harmonia.discover.root_repository','harmonia.accounts.root_repository']:
             p=patch(target,return_value=self.repo);p.start();self.addCleanup(p.stop)
-        p=patch('playlist_bridge.user_preferences.personal_repository',side_effect=lambda:self.other if (accounts.actor() or {}).get('id')=='other' else self.repo);p.start();self.addCleanup(p.stop)
-        p=patch('playlist_bridge.accounts.personal_repository',side_effect=lambda:self.other if (accounts.actor() or {}).get('id')=='other' else self.repo);p.start();self.addCleanup(p.stop)
+        p=patch('harmonia.user_preferences.personal_repository',side_effect=lambda:self.other if (accounts.actor() or {}).get('id')=='other' else self.repo);p.start();self.addCleanup(p.stop)
+        p=patch('harmonia.accounts.personal_repository',side_effect=lambda:self.other if (accounts.actor() or {}).get('id')=='other' else self.repo);p.start();self.addCleanup(p.stop)
         app=FastAPI();user_preferences.register(app);discover.register(app)
         self.route=lambda path,method='GET':next(r.endpoint for r in app.routes if getattr(r,'path','')==path and method in r.methods)
         self.ignore=self.route('/api/discover/history-ignored','POST');self.restore=self.route('/api/discover/history-ignored/{key}','DELETE');self.listing=self.route('/api/discover/history-ignored')
@@ -42,7 +42,7 @@ class HistoryExclusions(unittest.TestCase):
         settings={'history_min_plays':1,'history_sort':'plays','history_max_suggestions':1,'history_days':0}
         tracks=[{'name':'Chapter','artist':'Author','album':'An Audiobook'},{'name':'Song','artist':'Artist','album':'Music Album'}]
         endpoint=self.route('/api/discover/history-gaps').__wrapped__
-        with patch('playlist_bridge.user_preferences.preferences',return_value={'lastfm_username':'listener'}),patch('playlist_bridge.discover.lastfm_settings',return_value=settings),patch('playlist_bridge.discover.cached_history_tracks',return_value=(tracks,False,True)),patch('playlist_bridge.discover.availability',side_effect=lambda rows:rows),accounts.as_user({'id':'me'}):
+        with patch('harmonia.user_preferences.preferences',return_value={'lastfm_username':'listener'}),patch('harmonia.discover.lastfm_settings',return_value=settings),patch('harmonia.discover.cached_history_tracks',return_value=(tracks,False,True)),patch('harmonia.discover.availability',side_effect=lambda rows:rows),accounts.as_user({'id':'me'}):
             self.assertEqual(endpoint()['rows'][0]['album'],'An Audiobook')
             rule=self.ignore(self.Model(album='An Audiobook',artist='Author'))
             self.assertEqual(endpoint()['rows'][0]['album'],'Music Album')

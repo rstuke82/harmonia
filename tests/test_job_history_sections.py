@@ -2,8 +2,8 @@ import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
-from playlist_bridge import jobs, accounts, admin_activity, api
-from playlist_bridge.storage import Repository
+from harmonia import jobs, accounts, admin_activity, api
+from harmonia.storage import Repository
 
 
 class JobHistorySections(unittest.TestCase):
@@ -19,7 +19,7 @@ class JobHistorySections(unittest.TestCase):
 
     def test_member_keeps_active_jobs_visible_beyond_completed_page(self):
         endpoint=next(r.endpoint for r in api.app.routes if getattr(r,'path','')=='/api/job-history')
-        with accounts.as_user({'id':'2','admin':False}),patch('playlist_bridge.accounts.personal_repository',return_value=self.repo):
+        with accounts.as_user({'id':'2','admin':False}),patch('harmonia.accounts.personal_repository',return_value=self.repo):
             result=endpoint(offset=50,limit=50,owner='',worker='',sections=True)
         self.assertEqual(result['total'],60)
         self.assertEqual(len(result['rows']),10)
@@ -32,7 +32,7 @@ class JobHistorySections(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             other=jobs.Store(Repository(Path(folder)))
             other.enqueue('health',{'scope':'all'})
-            with patch('playlist_bridge.admin_activity.stores',return_value=[(owner,self.store),(member,other)]):
+            with patch('harmonia.admin_activity.stores',return_value=[(owner,self.store),(member,other)]):
                 result=admin_activity.history(offset=0,limit=1,owner='owner',worker='playlist',sections=True)
                 self.assertEqual(result['total'],60)
                 self.assertEqual(result['rows'][0]['id'],'done-59')
@@ -44,6 +44,6 @@ class JobHistorySections(unittest.TestCase):
 
     def test_completed_order_uses_finish_time_instead_of_queue_time(self):
         with self.repo.connect() as db:db.execute("UPDATE jobs SET finished_at='2026-10-10T00:00:00' WHERE id='done-00'")
-        with patch('playlist_bridge.admin_activity.stores',return_value=[({'id':'owner'},self.store)]):
+        with patch('harmonia.admin_activity.stores',return_value=[({'id':'owner'},self.store)]):
             result=admin_activity.history(limit=1,sections=True)
         self.assertEqual(result['rows'][0]['id'],'done-00')

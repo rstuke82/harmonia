@@ -5,8 +5,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from playlist_bridge.jobs import Manager, worker_for, wait_reason, history_where
-from playlist_bridge.storage import Repository
+from harmonia.jobs import Manager, worker_for, wait_reason, history_where
+from harmonia.storage import Repository
 
 
 class PagePreparation(unittest.TestCase):
@@ -49,7 +49,7 @@ class PagePreparation(unittest.TestCase):
                 if job['id'] == page:
                     store.update(job['id'], status='completed')
                     dispatched.set()
-            with patch('playlist_bridge.saved_views.tick'), patch('playlist_bridge.accounts.member_stores', return_value=[]), patch('playlist_bridge.playlist_schedules.due'), patch.object(manager.store, 'due'), patch.object(manager, 'execute', side_effect=execute):
+            with patch('harmonia.saved_views.tick'), patch('harmonia.accounts.member_stores', return_value=[]), patch('harmonia.playlist_schedules.due'), patch.object(manager.store, 'due'), patch.object(manager, 'execute', side_effect=execute):
                 scheduler = threading.Thread(target=manager.loop)
                 scheduler.start()
                 try:

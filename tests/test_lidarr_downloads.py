@@ -3,9 +3,9 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 from fastapi import HTTPException
-from playlist_bridge.storage import Repository
-from playlist_bridge import lidarr_downloads as downloads
-from playlist_bridge.lidarr_requests import server_id
+from harmonia.storage import Repository
+from harmonia import lidarr_downloads as downloads
+from harmonia.lidarr_requests import server_id
 
 class FakeClient:
     key='secret'
@@ -28,8 +28,8 @@ class DownloadTests(unittest.TestCase):
         self.cfg={'url':'http://lidarr','api_key':'secret','enabled':True}
         self.repo.save({'lidarr_requests':{'album':{'server':server_id(self.cfg),'lidarr_id':7,'title':'Album','status':'search_completed'}}})
         self.client=FakeClient()
-        self.patch=patch('playlist_bridge.lidarr.Client',return_value=self.client);self.patch.start()
-        self.logs=patch('playlist_bridge.api._record_log');self.log=self.logs.start()
+        self.patch=patch('harmonia.lidarr.Client',return_value=self.client);self.patch.start()
+        self.logs=patch('harmonia.api._record_log');self.log=self.logs.start()
         downloads._last.clear();downloads._catalog.clear()
     def tearDown(self):
         self.patch.stop();self.logs.stop();self.tmp.cleanup()
@@ -86,8 +86,8 @@ class DownloadTests(unittest.TestCase):
         self.assertEqual(state['download_status'],'Downloading')
         self.assertIn(('GET','album/7',{'quiet':True}),self.client.calls)
     def test_failed_finalization_is_not_automatically_requeued(self):
-        from playlist_bridge.lidarr_requests import save
-        from playlist_bridge.jobs import Store
+        from harmonia.lidarr_requests import save
+        from harmonia.jobs import Store
         self.client.items=[]
         save(self.repo,'album',download_status='Imported into Lidarr',finalize_status='failed',finalize_error='Previous failure')
         downloads.snapshot(self.repo,self.cfg,force=True)

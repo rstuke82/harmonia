@@ -1,3 +1,4 @@
+import ArtworkImage from './ArtworkImage'
 import {useEffect,useState,ReactNode} from 'react'
 import {downloadGroup} from './requestPresentation'
 export function coverStatus(row:any){
@@ -21,7 +22,5 @@ export function coverStatus(row:any){
 }
 export function CoverStatus({row}:{row:any}){const status=coverStatus(row);return <span className={'cover-status '+status.tone} role="img" aria-label={status.label} title={status.label}>{status.icon}</span>}
 export default function AlbumCover({src,children}:{src?:string;children?:ReactNode}){
- const [failed,setFailed]=useState(false)
- useEffect(()=>setFailed(false),[src])
- return <div className="album-cover">{src&&!failed?<img src={src} alt="" loading="lazy" onError={()=>setFailed(true)}/>:<div className="album-art-placeholder" aria-hidden="true">♫</div>}{children}</div>
+ return <div className="album-cover"><ArtworkImage key={src} src={src} alt="" loading="lazy"/>{children}</div>
 }

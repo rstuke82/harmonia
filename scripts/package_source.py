@@ -5,11 +5,11 @@ from pathlib import Path
 def package(root, destination):
     root=Path(root).resolve();destination=Path(destination).resolve()
     files=[]
-    top={'compose.yaml.example','compose.local.yaml','CONTAINER-STARTUP-CHANGES.md','SECURITY-HARDENING-CHANGES.md','SECURITY-DEPLOYMENT.md','RUNTIME-MIGRATION.md','FIX-TRACKER.md','UI-UX-FIXES.md','README.md','LICENSE','CHANGELOG.md','BUILD-NOTES.md','requirements.txt','requirements.lock','requirements.in','Dockerfile','.dockerignore','.gitignore','.env.example','docker-compose.yml','docker-compose.local.yml','REMAINING-FIXES.md','HISTORICAL-README-NOTES.md','HISTORICAL-BUILD-NOTES-20261008.9.md'}
+    top={'compose.yaml.example','README.md','LICENSE','CHANGELOG.md','SECURITY-DEPLOYMENT.md','requirements.txt','requirements.lock','requirements.in','Dockerfile','.dockerignore','.gitignore','.env.example','RELEASE-NOTES-1.0.0.92.md'}
     for p in root.rglob('*'):
         if not p.is_file():continue
         rel=p.relative_to(root)
-        if not (str(rel) in top or rel.parts[0] in {'playlist_bridge','web','tests','scripts','.github'}):continue
+        if not (str(rel) in top or rel.parts[0] in {'harmonia','web','tests','scripts','.github'}):continue
         if any(part in {'node_modules','dist','__pycache__','.git','.venv','backups'} for part in rel.parts):continue
         if p.suffix in {'.db','.sqlite','.sqlite3','.pyc','.log','.zip','.bak'} or p.name.endswith(('-wal','-shm')):continue
         if p.name.startswith('.env') and p.name!='.env.example':continue

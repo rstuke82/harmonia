@@ -15,7 +15,6 @@ venv/
 
 # Node / React / Vite
 web/node_modules
-web/node_modules/
 web/dist/
 web/.vite/
 

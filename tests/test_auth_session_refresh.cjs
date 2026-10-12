@@ -7,7 +7,7 @@ const deferred=()=>{let resolve;const promise=new Promise(r=>resolve=r);return {
 const code=ts.transpileModule(fs.readFileSync(path.join(__dirname,'../web/src/Auth.tsx'),'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2022}}).outputText;
 function harness(){
  let cursor=0,values=[],effects=[],cleanups=[],me={user:{id:'alice',name:'Alice'},csrf:'alice-csrf'},reloads=0;
- const events=new Map(),calls=[],storage={'bridge-old-data':'Alice private','playlist-bridge-appearance':'dark'},sessionStorage={clears:0,clear(){this.clears++}};
+ const events=new Map(),calls=[],storage={'bridge-old-data':'Alice private','harmonia-appearance':'dark'},sessionStorage={clears:0,clear(){this.clears++}};
  const localStorage={getItem:k=>storage[k]??null,setItem:(k,v)=>{storage[k]=String(v);localStorage[k]=String(v)},removeItem:k=>{delete storage[k];delete localStorage[k]}};
  Object.assign(localStorage,storage);
  const react={createContext:()=>({Provider:'provider'}),useContext:()=>null,
@@ -27,7 +27,7 @@ function harness(){
 (async()=>{
  let h=harness();h.render();await tick();assert.equal(h.render().props.value.id,'alice');
  h.events.get('focus')();await tick();assert.equal(h.reloads(),0,'unchanged session should not reload');
- h.setMe({user:null,csrf:''});h.events.get('focus')();await tick();assert.equal(h.env.exports.getAccount(),null);assert.equal(h.values[0],null);assert.equal(h.reloads(),1);assert(!('bridge-account-id' in h.storage));assert.equal(h.storage['playlist-bridge-appearance'],'dark');
+ h.setMe({user:null,csrf:''});h.events.get('focus')();await tick();assert.equal(h.env.exports.getAccount(),null);assert.equal(h.values[0],null);assert.equal(h.reloads(),1);assert(!('bridge-account-id' in h.storage));assert.equal(h.storage['harmonia-appearance'],'dark');
  await h.env.window.fetch('/api/mutation',{method:'POST'});assert.equal(h.calls.at(-1).headers.get('X-Bridge-CSRF'),null);h.cleanup();assert.equal(h.events.size,0);
  h=harness();h.render();await tick();const pending=deferred();h.setAPI(()=>pending.promise);const oldRequest=h.env.window.fetch('/api/library');const outcome=oldRequest.then(()=>null,e=>e);const oldSignal=h.calls.at(-1).signal;
  h.setMe({user:{id:'bob',name:'Bob'},csrf:'bob-csrf'});h.events.get('focus')();await tick();assert.equal(h.env.exports.getAccount().id,'bob');assert.equal(h.values[0],null,'old app removed during reload');assert(oldSignal.aborted);assert.equal(h.reloads(),1);

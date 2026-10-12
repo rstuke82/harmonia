@@ -4,6 +4,20 @@ services:
     # Image tags: latest (stable), beta, or a published version.
     image: ghcr.io/rstuke82/harmonia:latest
     restart: unless-stopped
+    read_only: true
+    cap_drop:
+      - ALL
+    cap_add:
+      # Required only for configuration ownership repair and privilege dropping.
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - SETUID
+      - SETGID
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
     ports:
       - "8173:8173"
     environment:

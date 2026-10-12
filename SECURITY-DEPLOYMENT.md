@@ -76,7 +76,7 @@ Each member can have at most 25 requests awaiting approval; resubmitting an exis
 
 ## Dependency and image maintenance (R06)
 
-Docker installs requirements.lock, resolved from the tested Python 3.12 runtime; requirements.txt includes this lock for native installs. requirements.in retains direct dependency constraints for deliberate updates. Startup validation follows the include rather than silently skipping dependency checks. Runtime and frontend bases are pinned to multiarchitecture digests. The runtime uses Debian Trixie and removes pip after installing dependencies; update containers by rebuilding rather than installing packages inside them.
+Docker installs requirements.lock, resolved from the tested Python 3.12 runtime; requirements.txt includes this lock for native installs. requirements.in retains direct dependency constraints for deliberate updates. Startup validation follows the include rather than silently skipping dependency checks. Runtime and frontend bases are pinned to multiarchitecture digests. The runtime uses a pinned Python 3.12 Alpine 3.23 base, upgrades its OS packages during the build, and requires zlib 1.3.2-r1 or newer. Update containers by rebuilding rather than installing packages inside them.
 
 The included .github/workflows/security.yml builds/tests/scans the actual image on native AMD64 and ARM64 runners. It uses an immutable checkout commit and pinned Docker Scout image. Configure limited Docker Scout credentials in repository secrets if the scanner requires them; missing scanner access is a failed check, not a clean scan. Critical/high advisories fail the check, including unfixed findings. Repository secrets DOCKER_SCOUT_HUB_USER and DOCKER_SCOUT_HUB_PASSWORD are required for the Docker Scout step.
 

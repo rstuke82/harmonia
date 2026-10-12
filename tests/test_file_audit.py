@@ -4,8 +4,8 @@ import time
 import unittest
 from pathlib import Path
 from unittest.mock import patch
-from playlist_bridge.file_audit import inspect,decorate
-from playlist_bridge.file_tools import Settings
+from harmonia.file_audit import inspect,decorate
+from harmonia.file_tools import Settings
 
 class Audit(unittest.TestCase):
     def setUp(self):
@@ -13,7 +13,7 @@ class Audit(unittest.TestCase):
         self.root=Path(self.temp.name).resolve()
         self.cfg=Settings(audit_enabled=True,mappings=[{'lidarr_path':'/lidarr','local_path':str(self.root)}]).model_dump()
         self.inv={'identity':'server','checked_at':time.time(),'rows':[{'id':1,'album_id':'album','artist':'Artist','title':'Album'}],'tracks':[{'id':'1','artist':'Artist','album':'Album','title':'Song','file':'/lidarr/one.flac','recording_id':'rec','album_id':'album'}]}
-        self.tags=patch('playlist_bridge.local_library.read_tags',return_value={'title':'Song','artist':'Artist','album_artist':'Artist','album':'Album','recording_id':'rec'})
+        self.tags=patch('harmonia.local_library.read_tags',return_value={'title':'Song','artist':'Artist','album_artist':'Artist','album':'Album','recording_id':'rec'})
         self.tags.start();self.addCleanup(self.tags.stop)
     def scan(self,previous=None,verify=False):return inspect(self.cfg,self.inv,{},previous,verify)
     def kinds(self,value):return {r['issue'] for r in value['issues']}
@@ -38,7 +38,7 @@ class Audit(unittest.TestCase):
         self.assertNotIn('Identical files',self.kinds(standard))
         verified=self.scan(standard,True)
         self.assertIn('Identical files',self.kinds(verified))
-        with patch('playlist_bridge.file_audit.digest_file',side_effect=AssertionError('should reuse unchanged checksum')):
+        with patch('harmonia.file_audit.digest_file',side_effect=AssertionError('should reuse unchanged checksum')):
             reused=self.scan(verified,True)
         self.assertIn('Identical files',self.kinds(reused))
         (self.root/'two.flac').write_bytes(b'else')
@@ -62,7 +62,7 @@ class Audit(unittest.TestCase):
             kwargs['onerror'](PermissionError('Subfolder not readable'))
             yield from real_walk(root,**kwargs)
         (self.root/'other.flac').write_bytes(b'data')
-        with patch('playlist_bridge.file_audit.os.walk',side_effect=walk):result=self.scan()
+        with patch('harmonia.file_audit.os.walk',side_effect=walk):result=self.scan()
         self.assertNotIn('Missing imported file',self.kinds(result))
         self.assertIn('Audit unavailable',self.kinds(result))
     def test_reviews_follow_exact_evidence(self):

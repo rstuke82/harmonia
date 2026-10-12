@@ -10,8 +10,8 @@ from pathlib import Path
 from unittest.mock import Mock, patch
 from starlette.requests import Request
 from fastapi import HTTPException
-from playlist_bridge import accounts, api, api_v1, discover, file_audit, lidarr, lidarr_requests
-from playlist_bridge.storage import Repository
+from harmonia import accounts, api, api_v1, discover, file_audit, lidarr, lidarr_requests
+from harmonia.storage import Repository
 import test_30
 import test_file_audit
 
@@ -23,7 +23,7 @@ class Access(unittest.TestCase):
         for path in ['/api/ignored/restore','/api/playlists']:
             status,_=asyncio.run(self.http(path,'POST',self.a,body={'title':'Song','artist':'Artist'}))
             self.assertEqual(status,403,path)
-        with patch('playlist_bridge.track_routes.inspect',return_value={'tracks':[]}):
+        with patch('harmonia.track_routes.inspect',return_value={'tracks':[]}):
             status,_=asyncio.run(self.http('/api/tracks/details','POST',self.a,body={'title':'Song','artist':'Artist'}))
         self.assertEqual(status,200)
     def test_member_request_availability_uses_personal_context_and_retains_redacted_failure(self):
@@ -56,7 +56,7 @@ class CredentialModes(unittest.TestCase):
                 with repo.connect() as db:
                     db.execute("INSERT INTO state VALUES('secret','key','{}')")
                     for p in directory.iterdir():
-                        if p.name in ['config.json','playlist-bridge.db','playlist-bridge.db-wal','playlist-bridge.db-shm'] or p.name.endswith('.bak'):
+                        if p.name in ['config.json','harmonia.db','harmonia.db-wal','harmonia.db-shm'] or p.name.endswith('.bak'):
                             self.assertEqual(stat.S_IMODE(p.stat().st_mode),0o600,p.name)
                 self.assertEqual(stat.S_IMODE(directory.stat().st_mode),0o700)
                 os.chmod(repo.path,0o644);Repository(directory)
@@ -66,7 +66,7 @@ class CredentialModes(unittest.TestCase):
     def test_symlinked_database_is_rejected_without_changing_target(self):
         with tempfile.TemporaryDirectory() as folder:
             root=Path(folder);target=root/'target';target.write_text('unchanged');directory=root/'data';directory.mkdir()
-            (directory/'playlist-bridge.db').symlink_to(target)
+            (directory/'harmonia.db').symlink_to(target)
             with self.assertRaises(OSError):Repository(directory)
             self.assertEqual(target.read_text(),'unchanged')
 
@@ -105,7 +105,7 @@ class Revisions(unittest.TestCase):
             lidarr_requests.save(repo,'album',download_error='Download failed')
             self.assertGreater(generation(),before)
     def test_job_progress_does_not_invalidate_requests_but_terminal_status_does(self):
-        from playlist_bridge.jobs import Store
+        from harmonia.jobs import Store
         with tempfile.TemporaryDirectory() as folder:
             repo=Repository(folder);jid=Store(repo).enqueue('album_finalize',{})
             def generation():
@@ -141,7 +141,7 @@ class SearchPages(unittest.TestCase):
             body=lidarr.Lookup(artist='Artist',title='Song',fields_search=True,provider='musicbrainz')
             get=Mock(return_value={'recordings':[{'id':'recording'}],'recording-count':26})
             records=[{'releases':[{'release-group':{'id':'album','title':'Album','artist-credit':[{'name':'Artist'}],'primary-type':'Album'}}]}]
-            with patch('playlist_bridge.musicbrainz_client.get',get),patch('playlist_bridge.song_albums.containing_albums',return_value=records):
+            with patch('harmonia.musicbrainz_client.get',get),patch('harmonia.song_albums.containing_albums',return_value=records):
                 first=lidarr.musicbrainz_search(repo,{},body)
                 second=lidarr.musicbrainz_search(repo,{},body.model_copy(update={'recording_offset':25}))
                 cached=lidarr.musicbrainz_search(repo,{},body.model_copy(update={'recording_offset':25}))

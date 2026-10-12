@@ -3,12 +3,12 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from playlist_bridge.discover import refresh_lastfm,history_tracks
-from playlist_bridge.jobs import wait_reason
-from playlist_bridge.lidarr import _discovery_title
-from playlist_bridge.lidarr_downloads import describe
-from playlist_bridge.storage import Repository
-from playlist_bridge.tasks import DEFINITIONS
+from harmonia.discover import refresh_lastfm,history_tracks
+from harmonia.jobs import wait_reason
+from harmonia.lidarr import _discovery_title
+from harmonia.lidarr_downloads import describe
+from harmonia.storage import Repository
+from harmonia.tasks import DEFINITIONS
 
 
 class Build2026100411Tests(unittest.TestCase):
@@ -38,9 +38,9 @@ class Build2026100411Tests(unittest.TestCase):
 
     def test_lastfm_refresh_is_scheduled_and_populates_saved_feeds(self):
         self.assertIn(('lastfm_refresh', 'all', 'Refresh Last.fm Discovery', 6, '00:45', 'metadata'), DEFINITIONS)
-        with tempfile.TemporaryDirectory() as directory,patch('playlist_bridge.discover.root_repository',return_value=Repository(Path(directory))),patch('playlist_bridge.user_preferences.preferences', return_value={'lastfm_username': 'listener'}), \
-             patch('playlist_bridge.jobs.progress'), \
-             patch('playlist_bridge.discover.lastfm', side_effect=[
+        with tempfile.TemporaryDirectory() as directory,patch('harmonia.discover.root_repository',return_value=Repository(Path(directory))),patch('harmonia.user_preferences.preferences', return_value={'lastfm_username': 'listener'}), \
+             patch('harmonia.jobs.progress'), \
+             patch('harmonia.discover.lastfm', side_effect=[
                  {'recenttracks': {'track': [{'date':{'uts':str(int(__import__('time').time())-100)}}, {'date':{'uts':str(int(__import__('time').time())-90)}}]}},
                  {'topartists': {'artist': []}},
                  {'artists': {'artist': []}},
@@ -53,9 +53,9 @@ class Build2026100411Tests(unittest.TestCase):
     def test_lastfm_history_uses_selected_range_and_pagination(self):
         first={'recenttracks':{'track':[{'name':'One','date':{'uts':'1999999900'}}]*200,'@attr':{'totalPages':'2'}}}
         second={'recenttracks':{'track':[{'name':'Two','date':{'uts':'1999999901'}}],'@attr':{'totalPages':'2'}}}
-        with tempfile.TemporaryDirectory() as directory,patch('playlist_bridge.discover.root_repository',return_value=Repository(Path(directory))),patch('playlist_bridge.jobs.progress'),patch('playlist_bridge.discover.lastfm_settings',return_value={'history_days':180}), \
-             patch('playlist_bridge.discover.lastfm',side_effect=[first,second]) as lookup, \
-             patch('playlist_bridge.discover.time.time',return_value=2_000_000_000):
+        with tempfile.TemporaryDirectory() as directory,patch('harmonia.discover.root_repository',return_value=Repository(Path(directory))),patch('harmonia.jobs.progress'),patch('harmonia.discover.lastfm_settings',return_value={'history_days':180}), \
+             patch('harmonia.discover.lastfm',side_effect=[first,second]) as lookup, \
+             patch('harmonia.discover.time.time',return_value=2_000_000_000):
             tracks,truncated=history_tracks('listener')
         self.assertEqual(len(tracks),201);self.assertFalse(truncated)
         self.assertEqual([call.kwargs['page'] for call in lookup.call_args_list],[1,2])

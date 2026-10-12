@@ -3,8 +3,8 @@ from unittest.mock import Mock, patch
 
 import requests
 
-from playlist_bridge import musicbrainz_client as client
-from playlist_bridge.musicbrainz_settings import Preferences
+from harmonia import musicbrainz_client as client
+from harmonia.musicbrainz_settings import Preferences
 
 
 class Repo:
@@ -26,7 +26,7 @@ class MusicBrainzRoutingTests(unittest.TestCase):
         self.repo=Repo()
 
     def call(self,entity,params=None,mirror='https://mirror.example/'):
-        with patch('playlist_bridge.musicbrainz_settings.settings',return_value={'enabled':True,'server_url':mirror}), \
+        with patch('harmonia.musicbrainz_settings.settings',return_value={'enabled':True,'server_url':mirror}), \
              patch.object(client.time,'sleep'):
             return client.get(self.repo,entity,params)
 
@@ -66,7 +66,7 @@ class MusicBrainzRoutingTests(unittest.TestCase):
     def test_public_search_never_attempts_mirror_and_is_throttled(self):
         with patch.object(client._session,'get',return_value=response()) as get, \
              patch.object(client.time,'sleep') as sleep, \
-             patch('playlist_bridge.musicbrainz_settings.settings',return_value={'enabled':True,'server_url':'https://mirror.example'}):
+             patch('harmonia.musicbrainz_settings.settings',return_value={'enabled':True,'server_url':'https://mirror.example'}):
             client.get(self.repo,'release-group',{'query':'releasegroup:Blue'})
         self.assertTrue(get.call_args.args[0].startswith(client.PUBLIC_BASE))
         sleep.assert_called_once()
@@ -74,7 +74,7 @@ class MusicBrainzRoutingTests(unittest.TestCase):
     def test_public_fallback_uses_public_limiter(self):
         with patch.object(client._session,'get',side_effect=[requests.Timeout(),response()]), \
              patch.object(client.time,'sleep') as sleep, \
-             patch('playlist_bridge.musicbrainz_settings.settings',return_value={'enabled':True,'server_url':'https://mirror.example'}):
+             patch('harmonia.musicbrainz_settings.settings',return_value={'enabled':True,'server_url':'https://mirror.example'}):
             client.get(self.repo,'release/11111111-1111-1111-1111-111111111111')
         sleep.assert_called_once()
 

@@ -6,10 +6,10 @@ import unittest
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
-from playlist_bridge.jobs import wait_reason, Store, Manager
-from playlist_bridge.storage import Repository
-from playlist_bridge.inventory import scan, queue_reconciliation
-from playlist_bridge.process_lock import ProcessLock
+from harmonia.jobs import wait_reason, Store, Manager
+from harmonia.storage import Repository
+from harmonia.inventory import scan, queue_reconciliation
+from harmonia.process_lock import ProcessLock
 
 class Concurrency(unittest.TestCase):
     def test_independent_fetches_can_overlap(self):
@@ -44,7 +44,7 @@ class Concurrency(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             repo=Repository(Path(directory)); store=Store(repo)
             client=SimpleNamespace(base_url='plex',music_library_key='1',headers={},machine_identifier='server',_fetch_library=lambda: [{'plex_id':'1'}])
-            with patch('playlist_bridge.api.job_store',return_value=store),patch('playlist_bridge.api._config'),patch('playlist_bridge.api._health_plex',return_value=client),patch('playlist_bridge.accounts.member_stores',return_value=[]),patch('playlist_bridge.inventory.reconcile',side_effect=AssertionError('must not run inline')):
+            with patch('harmonia.api.job_store',return_value=store),patch('harmonia.api._config'),patch('harmonia.api._health_plex',return_value=client),patch('harmonia.accounts.member_stores',return_value=[]),patch('harmonia.inventory.reconcile',side_effect=AssertionError('must not run inline')):
                 result=scan('plex')
             self.assertEqual(repo.load_one('inventory','plex')['rows'],[{'plex_id':'1'}])
             self.assertTrue(result['reconciliation']['queued'])
@@ -76,7 +76,7 @@ class Concurrency(unittest.TestCase):
                     started[job['action']].set()
                     release.wait(5)
                     store.update(job['id'],status='completed')
-            with patch('playlist_bridge.saved_views.tick'),patch('playlist_bridge.accounts.member_stores',return_value=[]),patch('playlist_bridge.playlist_schedules.due'),patch.object(manager.store,'due'),patch('playlist_bridge.api_v1.catalog_batch_wait_seconds',return_value=0),patch.object(manager,'execute',side_effect=execute):
+            with patch('harmonia.saved_views.tick'),patch('harmonia.accounts.member_stores',return_value=[]),patch('harmonia.playlist_schedules.due'),patch.object(manager.store,'due'),patch('harmonia.api_v1.catalog_batch_wait_seconds',return_value=0),patch.object(manager,'execute',side_effect=execute):
                 scheduler=threading.Thread(target=manager.loop);scheduler.start()
                 try:
                     for action,event in started.items():

@@ -129,7 +129,7 @@ async function send<T>(path:string, init?:RequestInit):Promise<T> {
       if(controller.signal.aborted)throw new DOMException('Saved view is still preparing','AbortError')
       response=await fetch(pollPath,{...init,signal:controller.signal,headers:{'Content-Type':'application/json',...init?.headers}})
     }
-    if(path!=='/api/playlists'&&response.headers.get('X-Saved-View-Stale')==='true')watchSaved(path,response.headers.get('X-Saved-View-Updated')||'0')
+    if(response.headers.get('X-Saved-View-Stale')==='true')watchSaved(path,response.headers.get('X-Saved-View-Updated')||'0')
     if (!response.ok) {
       const body = await response.json().catch(()=>({}))
       throw new Error(typeof body.detail === 'string' ? body.detail : `Request failed (${response.status}). Check Settings → Logs.`)

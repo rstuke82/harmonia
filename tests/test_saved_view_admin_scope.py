@@ -2,7 +2,7 @@ import json,unittest
 from types import SimpleNamespace
 from unittest.mock import patch
 import test_30
-from playlist_bridge import accounts,saved_views,jobs
+from harmonia import accounts,saved_views,jobs
 
 class AdminScope(unittest.TestCase):
     setUp=test_30.MultiUser.setUp

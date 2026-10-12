@@ -2,9 +2,9 @@ import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import Mock, patch
-from playlist_bridge.storage import Repository
-from playlist_bridge.musicbrainz_settings import Preferences, settings, ordered
-from playlist_bridge import lidarr
+from harmonia.storage import Repository
+from harmonia.musicbrainz_settings import Preferences, settings, ordered
+from harmonia import lidarr
 
 class MusicBrainzTests(unittest.TestCase):
     @staticmethod
@@ -31,12 +31,12 @@ class MusicBrainzTests(unittest.TestCase):
             import hashlib,time
             key=hashlib.sha256(('release-group'+'releasegroup:"Album" AND artist:"Artist"').encode()).hexdigest()
             lidarr.state_put(repo,'musicbrainz_cache',key,{'at':time.time(),'rows':[{'type':'Single'},{'type':'Album'}]})
-            with patch('playlist_bridge.musicbrainz_client._session.get') as get:
+            with patch('harmonia.musicbrainz_client._session.get') as get:
                 result=lidarr.musicbrainz_search(repo,{},request)
                 self.assertTrue(result['cached'])
                 self.assertEqual(result['rows'][0]['type'],'Album')
                 get.assert_not_called()
-            with patch('playlist_bridge.musicbrainz_client._session.get',return_value=self.response({'release-groups':[]})) as get, patch('playlist_bridge.musicbrainz_client.time.sleep'):
+            with patch('harmonia.musicbrainz_client._session.get',return_value=self.response({'release-groups':[]})) as get, patch('harmonia.musicbrainz_client.time.sleep'):
                 request.force_refresh=True
                 result=lidarr.musicbrainz_search(repo,{},request)
                 self.assertFalse(result['cached'])
@@ -50,13 +50,13 @@ class MusicBrainzTests(unittest.TestCase):
                 ({'title':'Song','artist':'Artist','album':'Album'}, 'release-group', 'releasegroup:"Album" AND artist:"Artist"'),
                 ({'artist':'Artist'}, 'release-group', 'artist:"Artist"'),
             ]:
-                with patch('playlist_bridge.musicbrainz_client._session.get',return_value=self.response({})) as get, patch('playlist_bridge.musicbrainz_client.time.sleep'):
+                with patch('harmonia.musicbrainz_client._session.get',return_value=self.response({})) as get, patch('harmonia.musicbrainz_client.time.sleep'):
                     lidarr.musicbrainz_search(repo,{},lidarr.Lookup(**values, fields_search=True))
                     self.assertTrue(get.call_args.args[0].endswith('/'+entity))
                     self.assertEqual(get.call_args.kwargs['params']['query'],query)
 
     def test_settings_routes_precede_website_mount(self):
-        from playlist_bridge.api import app, WEB_DIST
+        from harmonia.api import app, WEB_DIST
         from starlette.routing import Match
         self.assertTrue(WEB_DIST.exists(), 'Build frontend before checking production routing')
         for method,path in [('GET','/api/settings/musicbrainz'),('PUT','/api/settings/musicbrainz'),('POST','/api/settings/musicbrainz/test'),('GET','/api/settings/lidarr/tags')]:

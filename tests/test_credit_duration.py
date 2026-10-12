@@ -1,14 +1,14 @@
 import unittest
-from playlist_bridge.matching import Matcher
+from harmonia.matching import Matcher
 class CreditDuration(unittest.TestCase):
     def setUp(self):
-        self.source={'title':'Yeah! (feat. Lil Jon & Ludacris)','artist':'USHER, Lil Jon, Ludacris','album':'','duration':250200}
+        self.source={'title':'Yeah! (feat. Lil Jon & Ludacris)','artist':'USHER, Lil Jon, Ludacris','album':'Confessions','duration':250200}
         self.plex={'plex_id':'one','title':'Yeah!','artist':'Usher','album':'Confessions','duration':250000}
     def test_featured_comma_credit_matches(self):
         self.assertEqual(Matcher._match_catalog_track(self.source,[self.plex],{}),'one')
         self.assertIn('duration',Matcher.score_candidate(self.source,self.plex)['artist_credit_reason'])
     def test_structured_lead_without_album(self):
-        source={**self.source,'title':'Yeah!','artists':['Usher','Lil Jon','Ludacris']}
+        source={**self.source,'title':'Yeah!','album':'','artists':['Usher','Lil Jon','Ludacris']}
         self.assertEqual(Matcher._match_catalog_track(source,[self.plex],{}),'one')
     def test_wrong_artist_not_rescued(self):
         self.assertIsNone(Matcher._match_catalog_track(self.source,[{**self.plex,'artist':'Other'}],{}))

@@ -1,6 +1,6 @@
-from playlist_bridge.process_lock import ProcessLock
-from playlist_bridge.matching import Matcher
-from playlist_bridge.config import Config
+from harmonia.process_lock import ProcessLock
+from harmonia.matching import Matcher
+from harmonia.config import Config
 import asyncio
 import json
 import threading
@@ -8,10 +8,10 @@ import time
 import unittest
 from unittest.mock import patch
 from test_30 import MultiUser
-from playlist_bridge import accounts, api, tasks, source_history
-from playlist_bridge.musicbrainz_settings import search_scores,Preferences
-from playlist_bridge.lidarr import Lookup
-from playlist_bridge.jobs import Store,Manager
+from harmonia import accounts, api, tasks, source_history
+from harmonia.musicbrainz_settings import search_scores,Preferences
+from harmonia.lidarr import Lookup
+from harmonia.jobs import Store,Manager
 
 class Beta2(MultiUser):
     def test_admin_can_view_other_users_jobs(self):
@@ -28,8 +28,8 @@ class Beta2(MultiUser):
 
     def test_preferences_and_blocklist_are_personal(self):
         endpoint=lambda p,m:next(r.endpoint for r in api.app.routes if getattr(r,'path','')==p and m in getattr(r,'methods',set()))
-        from playlist_bridge.user_preferences import blocked
-        from playlist_bridge.lidarr import state_put
+        from harmonia.user_preferences import blocked
+        from harmonia.lidarr import state_put
         with accounts.as_user(self.a):
             state_put(accounts.personal_repository(),'blocked_artists','test',{'name':'Radiohead'})
             self.assertTrue(blocked({'artist':'Radiohead'}))
@@ -48,7 +48,7 @@ class Beta2(MultiUser):
         source_history.record(self.repo,'test',[]);self.assertEqual(len(self.repo.load('source_audit')),1)
 
     def test_interval_start_time(self):
-        from playlist_bridge.jobs import next_run
+        from harmonia.jobs import next_run
         from datetime import datetime,timezone
         cron=tasks.expression(3,'02:30')
         self.assertEqual(tasks.hours_for(cron),3)
@@ -57,7 +57,7 @@ class Beta2(MultiUser):
     def test_artist_collaboration_and_versions(self):
         source={'title':'The Middle','artist':'Zedd, Maren Morris & Grey','artists':[{'name':'Zedd'},{'name':'Maren Morris'},{'name':'Grey'}],'album':'The Middle - Single'}
         candidate={'title':'The Middle','artist':'Zedd','album':'The Middle','plex_id':'1'}
-        with patch('playlist_bridge.track_bridge.context',return_value=None):
+        with patch('harmonia.track_bridge.context',return_value=None):
             self.assertEqual(Matcher.match_track(source,[candidate]),'1')
             self.assertIsNone(Matcher.match_track(source,[{**candidate,'album':'Live in London'}]))
             self.assertIsNone(Matcher.match_track(source,[{**candidate,'artist':'Jimmy Eat World'}]))
@@ -85,7 +85,7 @@ class Beta2(MultiUser):
                     with ProcessLock():pass
 
     def test_same_destination_is_locked_across_accounts(self):
-        from playlist_bridge.job_locks import destinations
+        from harmonia.job_locks import destinations
         for user in (self.a,self.b):
             with accounts.as_user(user):
                 c=Config();c.config['playlists']=[{'source':'spotify','source_id':user['id'],'plex_playlist_id':'same'}];c.save()
@@ -96,37 +96,37 @@ class Beta2(MultiUser):
                         with destinations(api.job_store(),{}):pass
 
     def test_sync_applies_only_its_playlist_drafts(self):
-        from playlist_bridge.match_queue import stage_changes
+        from harmonia.match_queue import stage_changes
         with accounts.as_user(self.a):
             c=Config();c.config['playlists']=[{'source':'spotify','source_id':'one'},{'source':'spotify','source_id':'two'}];c.save()
             repo=api.job_store().repository
             stage_changes(repo,[{'playlist_key':'spotify:'+key,'search_key':'Song|Artist','source':{},'plex_id':'1'} for key in ('one','two')])
-            with patch('playlist_bridge.match_queue.execute') as apply,patch.object(api,'_execute_job',return_value={'ok':True}):
+            with patch('harmonia.match_queue.execute') as apply,patch.object(api,'_execute_job',return_value={'ok':True}):
                 api.execute_job('sync',{'scope':'selected','playlist_keys':['spotify:one']})
             self.assertEqual([r['playlist_key'] for r in apply.call_args.args[0]['changes']],['spotify:one'])
             self.assertTrue(apply.call_args.args[0]['save_only'])
 
     def test_available_requires_both_and_blocks_cached_results(self):
-        from playlist_bridge.discover import availability
-        from playlist_bridge.lidarr import state_put
+        from harmonia.discover import availability
+        from harmonia.lidarr import state_put
         now=time.time()
-        plex={'checked_at':now,'rows':[{'artist':'Artist','album':'Album','plex_id':'1'}]}
+        plex={'checked_at':now,'rows':[{'artist':'Artist','album':'Album','plex_id':'1','plex_album_id':'album-pid'}]}
         lidarr={'checked_at':now,'rows':[{'artist':'Artist','title':'Album','album_id':'id','statistics':{'trackCount':1}}]}
-        with accounts.as_user(self.a),patch('playlist_bridge.inventory.current',return_value=(plex,lidarr)):
+        with accounts.as_user(self.a),patch('harmonia.inventory.current',return_value=(plex,lidarr)):
             self.assertEqual(availability([{'artist':'Artist','album':'Album'}])[0]['availability'],'Available')
             state_put(accounts.personal_repository(),'blocked_artists','x',{'name':'Artist'})
             self.assertEqual(availability([{'artist':'Artist','album':'Album'}]),[])
-        with accounts.as_user(self.b),patch('playlist_bridge.inventory.current',return_value=(plex,{'checked_at':now,'rows':[]})):
+        with accounts.as_user(self.b),patch('harmonia.inventory.current',return_value=(plex,{'checked_at':now,'rows':[]})):
             self.assertEqual(availability([{'artist':'Artist','album':'Album'}])[0]['availability'],'Needs Attention')
 
     def test_new_inventory_does_not_queue_retry(self):
-        from playlist_bridge.inventory import scan
+        from harmonia.inventory import scan
         with accounts.as_user(self.a):
             repo=api.job_store().repository;repo.save({'missing':{'spotify:test':[{'title':'Song','artist':'Artist'}]}})
             client=type('Client',(),{'base_url':'http://plex','music_library_key':'1','headers':{},'machine_identifier':'server','_fetch_library':lambda self:[{'plex_id':'1'}]})()
-            with patch('playlist_bridge.api._health_plex',return_value=client), \
-                 patch('playlist_bridge.artwork_sync.queue_pending'), \
-                 patch('playlist_bridge.accounts.member_stores',return_value=[]):
+            with patch('harmonia.api._health_plex',return_value=client), \
+                 patch('harmonia.artwork_sync.queue_pending'), \
+                 patch('harmonia.accounts.member_stores',return_value=[]):
                 for _ in range(2):scan('plex')
             self.assertEqual(len([j for j in api.job_store().list() if j['action']=='retry_missing']),0)
 
@@ -140,14 +140,14 @@ class Beta2(MultiUser):
         status,_=asyncio.run(self.http('/api/jobs/submission/'+sid,user=self.b));self.assertEqual(status,404)
 
     def test_description_refresh_preserves_success_timestamp(self):
-        from playlist_bridge.description_refresh import execute
-        from playlist_bridge.playlist_description import MARKER
+        from harmonia.description_refresh import execute
+        from harmonia.playlist_description import MARKER
         from unittest.mock import MagicMock
         with accounts.as_user(self.a):
             c=Config();c.config['playlists']=[{'source':'spotify','source_id':'one','plex_playlist_id':'123','last_synced':'2026-09-25T10:00:00+00:00'}];c.save()
             description='Source text'+MARKER+'Last successful sync: Sep 25, 2026 at 5:00 AM CDT\nTracks: 25 source · 25 matched'
             response=MagicMock();response.json.return_value={'MediaContainer':{'Metadata':[{'summary':description}]}}
-            with patch.object(api,'_health_plex',return_value=MagicMock()),patch('playlist_bridge.description_refresh.requests.get',return_value=response),patch('playlist_bridge.description_refresh.requests.put') as write:
+            with patch.object(api,'_health_plex',return_value=MagicMock()),patch('harmonia.description_refresh.requests.get',return_value=response),patch('harmonia.description_refresh.requests.put') as write:
                 execute({'playlist_keys':['spotify:one']})
             summary=write.call_args.kwargs['params']['summary'];self.assertIn('Next scheduled sync:',summary);self.assertIn('Last successful sync: Sep 25, 2026 at 5:00 AM CDT',summary);self.assertIn('25 matched',summary)
             self.assertEqual(Config().config['playlists'][0]['last_synced'],'2026-09-25T10:00:00+00:00')
@@ -163,7 +163,7 @@ class Beta2(MultiUser):
         def run(job,store,user):
             if job['action']=='backup':exclusive.set();store.update(job['id'],status='completed');return
             started.append(user['id']);barrier.wait(timeout=5);both.set();release.wait(timeout=5);store.update(job['id'],status='completed')
-        from playlist_bridge import playlist_schedules
+        from harmonia import playlist_schedules
         with patch.object(Store,'due'),patch.object(playlist_schedules,'due'),patch.object(accounts,'member_stores',return_value=[(self.a,a_store),(self.b,b_store)]),patch.object(manager,'execute',side_effect=run):
             manager.thread=threading.Thread(target=manager.loop);manager.thread.start()
             try:
@@ -173,12 +173,12 @@ class Beta2(MultiUser):
             finally:release.set();manager.close()
 
     def test_library_cache_keeps_separate_accounts_warm(self):
-        from playlist_bridge.library_cache import reuse,load,invalidate
+        from harmonia.library_cache import reuse,load,invalidate
         from types import SimpleNamespace
         from unittest.mock import Mock
         invalidate();a=SimpleNamespace(base_url='http://plex',music_library_key='1',headers={'X-Plex-Token':'a'});b=SimpleNamespace(base_url='http://plex',music_library_key='1',headers={'X-Plex-Token':'b'})
         first=Mock(return_value=[{'plex_id':'a'}]);second=Mock(return_value=[{'plex_id':'b'}])
-        with patch('playlist_bridge.inventory.snapshot',return_value={}):
+        with patch('harmonia.inventory.snapshot',return_value={}):
             with reuse(refresh=True):self.assertEqual(load(a,first)[0]['plex_id'],'a')
             with reuse(refresh=True):self.assertEqual(load(b,second)[0]['plex_id'],'b')
             with reuse(refresh=True):self.assertEqual(load(a,first)[0]['plex_id'],'a')

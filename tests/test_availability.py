@@ -4,23 +4,23 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock,patch
 from contextlib import nullcontext
-from playlist_bridge.storage import Repository
-from playlist_bridge.jobs import Store
-from playlist_bridge import availability,library_cache,tasks
+from harmonia.storage import Repository
+from harmonia.jobs import Store
+from harmonia import availability,library_cache,tasks
 
 class AvailabilityTests(unittest.TestCase):
     def test_plex_library_response_is_decoded_once(self):
-        from playlist_bridge.plex_client import PlexAPI
+        from harmonia.plex_client import PlexAPI
         client=object.__new__(PlexAPI)
         client.base_url='http://plex';client.music_library_key='1';client.music_library_name='Music'
         client.headers={};client.strict_errors=True
         response=Mock(status_code=200)
         response.json.side_effect=[{'MediaContainer':{'Metadata':[]}},AssertionError('Plex response decoded twice')]
-        with patch('playlist_bridge.network.get',return_value=response):
+        with patch('harmonia.network.get',return_value=response):
             self.assertEqual(client._fetch_library(),[])
         self.assertEqual(response.json.call_count,1)
 
-    @patch('playlist_bridge.inventory.snapshot',return_value={'checked_at':1,'rows':[{'plex_id':'saved'}]})
+    @patch('harmonia.inventory.snapshot',return_value={'checked_at':1,'rows':[{'plex_id':'saved'}]})
     def test_cache_reuse_refresh_and_identity(self,_snapshot):
         library_cache.invalidate()
         client=SimpleNamespace(base_url='plex',music_library_key='1',headers={'token':'a'})
@@ -52,15 +52,21 @@ class AvailabilityTests(unittest.TestCase):
     def test_manual_task_run_links_to_its_task_row(self):
         with tempfile.TemporaryDirectory() as directory:
             repo=Repository(Path(directory)/'bridge.sqlite');store=Store(repo)
-            with patch('playlist_bridge.tasks.local_scan_ready',return_value=True):tasks.setup(store)
+            with patch('harmonia.tasks.local_scan_ready',return_value=True):tasks.setup(store)
             job_id=store.enqueue('file_audit',{})
             store.claim(job_id)
             config=SimpleNamespace(config={'playlists':[]})
-            with patch('playlist_bridge.tasks.local_scan_ready',return_value=True),patch('playlist_bridge.api._config',return_value=config):
+            with patch('harmonia.tasks.local_scan_ready',return_value=True),patch('harmonia.api._config',return_value=config):
                 row=next(r for r in tasks.rows(store) if r['action']=='file_audit')
             self.assertEqual(row['active_job']['id'],job_id)
             self.assertEqual(row['active_origin'],'manual')
+            self.assertIsNone(row['last_job'])
+            from harmonia.jobs import now
+            store.update(job_id,status='completed',finished_at=now())
+            with patch('harmonia.tasks.local_scan_ready',return_value=True),patch('harmonia.api._config',return_value=config):
+                row=next(r for r in tasks.rows(store) if r['action']=='file_audit')
             self.assertEqual(row['last_job']['id'],job_id)
+            self.assertIsNone(row['active_job'])
 
     def test_scan_deduplicates_preserves_manual_and_scopes_sync(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -72,7 +78,7 @@ class AvailabilityTests(unittest.TestCase):
             syncer._find_ignored_track_key.side_effect=lambda key,t:t['title']=='Ignored'
             syncer._get_match_provenance.side_effect=lambda key,s:'manual' if s=='Manual|Artist' else 'automatic'
             syncer._same_missing_identity.side_effect=lambda a,b:a['title']==b['title']
-            with patch('playlist_bridge.api.job_store',return_value=store),patch('playlist_bridge.api._config',return_value=config),patch('playlist_bridge.api._playlist_key',side_effect=lambda p:p['key']),patch('playlist_bridge.api._health_plex') as plex,patch('playlist_bridge.process_lock.ProcessLock',return_value=nullcontext()),patch('playlist_bridge.sync_engine.Syncer',return_value=syncer),patch('playlist_bridge.matching.Matcher.match_track',return_value='7') as match,patch('playlist_bridge.api._record_log'):
+            with patch('harmonia.api.job_store',return_value=store),patch('harmonia.api._config',return_value=config),patch('harmonia.api._playlist_key',side_effect=lambda p:p['key']),patch('harmonia.api._health_plex') as plex,patch('harmonia.process_lock.ProcessLock',return_value=nullcontext()),patch('harmonia.sync_engine.Syncer',return_value=syncer),patch('harmonia.matching.Matcher.match_track',return_value='7') as match,patch('harmonia.api._record_log'):
                 plex.return_value.search_library.return_value=[{'plex_id':'7','title':'Song','artist':'Artist'}]
                 result=availability.execute({})
             self.assertEqual(match.call_count,1)
@@ -83,9 +89,9 @@ class AvailabilityTests(unittest.TestCase):
             self.assertEqual(result['matches_found'],1)
 
     def test_unchanged_tracks_do_not_write(self):
-        from playlist_bridge.plex_client import PlexAPI
+        from harmonia.plex_client import PlexAPI
         client=object.__new__(PlexAPI)
         client.get_playlist_items=Mock(return_value=[{'plex_id':'1'},{'plex_id':'1'},{'plex_id':'2'}])
-        with patch('playlist_bridge.network.post') as post,patch('playlist_bridge.network.put') as put:
+        with patch('harmonia.network.post') as post,patch('harmonia.network.put') as put:
             self.assertTrue(client.replace_playlist_tracks('p',['1','1','2']))
             post.assert_not_called();put.assert_not_called()

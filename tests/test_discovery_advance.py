@@ -1,5 +1,5 @@
 import unittest
-from playlist_bridge.lidarr import _discovery_title
+from harmonia.lidarr import _discovery_title
 
 class AdvanceDiscoveryTests(unittest.TestCase):
     def test_supported_release_qualifiers(self):

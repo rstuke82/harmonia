@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-const key='playlist-bridge-appearance'
+const key='harmonia-appearance'
 type Theme={mode:string;color:string}
 export function readTheme():Theme{try{const saved=JSON.parse(localStorage.getItem(key)||'{}');return {mode:['light','dark','system'].includes(saved.mode)?saved.mode:'system',color:/^#[0-9a-f]{6}$/i.test(saved.color)?saved.color:'#287fff'}}catch{return {mode:'system',color:'#287fff'}}}
 export function applyTheme(theme=readTheme()){

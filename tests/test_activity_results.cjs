@@ -12,6 +12,7 @@ const env={exports:exportsObject,navigator:{},window:{isSecureContext:false},req
  if(name==='react')return React;
  if(name==='react/jsx-runtime')return require(path.join(web,'node_modules/react/jsx-runtime'));
  if(name==='./api')return {api:{},activeJob:job=>['queued','running','cancelling'].includes(job.status)};
+ if(name==='./jobLabels'){const labels={};vm.runInNewContext(ts.transpileModule(fs.readFileSync(path.join(web,'src/jobLabels.ts'),'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText,{exports:labels});return labels;}
  if(name==='./jobActivity')return {currentJobLanes:()=>[]};
  if(name==='./labels')return {displayText:value=>String(value||'')};
  if(name==='./HealthCard')return {stamp:value=>value||''};

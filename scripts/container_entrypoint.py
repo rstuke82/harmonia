@@ -96,7 +96,7 @@ def main():
     finally:
         if fd is not None:
             os.close(fd)
-    command = sys.argv[1:] or ['python', '-m', 'playlist_bridge', 'web']
+    command = sys.argv[1:] or ['python', '-m', 'harmonia', 'web']
     os.execvp(command[0], command)
 
 

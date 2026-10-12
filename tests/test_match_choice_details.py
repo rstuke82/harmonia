@@ -1,14 +1,14 @@
 import tempfile,time,unittest
 from pathlib import Path
 from unittest.mock import patch
-from playlist_bridge.storage import Repository
-from playlist_bridge import api,inventory
-from playlist_bridge.config import Config
-from playlist_bridge.plex_client import PlexAPI
-from playlist_bridge.sync_engine import Syncer
-from playlist_bridge.apple_music_source import AppleMusicAPI
-from playlist_bridge.matching import Matcher
-from playlist_bridge.match_candidates import consolidate
+from harmonia.storage import Repository
+from harmonia import api,inventory
+from harmonia.config import Config
+from harmonia.plex_client import PlexAPI
+from harmonia.sync_engine import Syncer
+from harmonia.apple_music_source import AppleMusicAPI
+from harmonia.matching import Matcher
+from harmonia.match_candidates import consolidate
 
 class MatchChoiceDetails(unittest.TestCase):
     def test_deduplicate_same_id_or_recording_but_keep_versions_and_unknowns(self):
@@ -32,7 +32,7 @@ class MatchChoiceDetails(unittest.TestCase):
         track=AppleMusicAPI._track_from_item({'name':'Song','artistName':'Band','duration':210000})
         self.assertEqual(track['duration'],210000)
     def test_source_duration_formats(self):
-        from playlist_bridge.track_duration import source_duration
+        from harmonia.track_duration import source_duration
         self.assertEqual(source_duration({'duration':{'totalMilliseconds':210000}}),210000)
         self.assertEqual(source_duration({'duration':'3:30'}),210)
         self.assertIsNone(source_duration({'duration':{'unexpected':1}}))
@@ -40,7 +40,7 @@ class MatchChoiceDetails(unittest.TestCase):
     def test_picker_loads_global_aliases_and_uses_saved_inventory(self):
         with tempfile.TemporaryDirectory() as directory:
             repo=Repository(Path(directory));repo.save({'runtime':{'plex':{'url':'http://plex','token':'fixture','music_library_key':'1'}},'artist_aliases':{'Canonical Band':['Different Alias']}})
-            with patch('playlist_bridge.accounts.personal_repository',return_value=repo),patch('playlist_bridge.accounts.root_repository',return_value=repo),patch('playlist_bridge.accounts.actor',return_value=None),patch('playlist_bridge.api.job_store',return_value=type('Store',(),{'repository':repo})()),patch('playlist_bridge.api._record_log'),patch.object(PlexAPI,'_fetch_library',side_effect=AssertionError('Picker must use saved inventory')),patch('playlist_bridge.network.get',side_effect=AssertionError('Picker must not contact Plex')):
+            with patch('harmonia.accounts.personal_repository',return_value=repo),patch('harmonia.accounts.root_repository',return_value=repo),patch('harmonia.accounts.actor',return_value=None),patch('harmonia.api.job_store',return_value=type('Store',(),{'repository':repo})()),patch('harmonia.api._record_log'),patch.object(PlexAPI,'_fetch_library',side_effect=AssertionError('Picker must use saved inventory')),patch('harmonia.network.get',side_effect=AssertionError('Picker must not contact Plex')):
                 config=Config(read_only=True,namespaces=['artist_aliases']);client=type('Client',(),{'base_url':'http://plex','music_library_key':'1','headers':{'X-Plex-Token':'fixture','Accept':'application/json'}})()
                 inventory.publish(repo,'plex',inventory.identity(client),[{'plex_id':'1','title':'Song','artist':'Canonical Band','album':'Record','duration':200000}],time.monotonic())
                 Matcher.set_artist_aliases({})

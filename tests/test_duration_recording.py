@@ -1,6 +1,6 @@
 import unittest
-from playlist_bridge.matching import Matcher
-from playlist_bridge.track_bridge import match, _context
+from harmonia.matching import Matcher
+from harmonia.track_bridge import match, _context
 
 class DurationRecording(unittest.TestCase):
     def evaluate(self,duration=338500,other=372533,first=336773,cached=False):
@@ -10,7 +10,7 @@ class DurationRecording(unittest.TestCase):
         ctx={'tracks':tracks,'links':{'L1':{'plex_id':'P1'},'L2':{'plex_id':'P2'}},'pending':False}
         if cached:
             import hashlib
-            from playlist_bridge.track_bridge import identity
+            from harmonia.track_bridge import identity
             key=hashlib.sha256(repr(identity(source)).encode()).hexdigest()
             ctx['source_links']={key:{'lidarr_id':'L2','identity':list(identity(tracks[1]))}}
         token=_context.set(ctx)

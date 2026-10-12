@@ -6,9 +6,9 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 from fastapi import FastAPI
-from playlist_bridge import accounts,library,saved_views,library_inventory
-from playlist_bridge.jobs import Store
-from playlist_bridge.storage import Repository
+from harmonia import accounts,library,saved_views,library_inventory
+from harmonia.jobs import Store
+from harmonia.storage import Repository
 
 ARTIST='11111111-1111-1111-1111-111111111111'
 ALBUM='22222222-2222-2222-2222-222222222222'
@@ -24,10 +24,10 @@ class AlbumReads(unittest.TestCase):
                     {'album_id':OTHER,'id':11,'artist_id':1,'artist':'Artist','artist_mbid':ARTIST,'title':'Other','statistics':{'trackFileCount':12,'trackCount':12}}],
             'tracks':[{'id':'t1','album_id':ALBUM,'title':'Song','artist':'Artist','album':'Partial','file':'/music/song.flac','track_number':1}]}
         self.plex={'checked_at':time.time(),'rows':[{'plex_id':'p1','plex_artist_id':'pa','plex_album_id':'pal','title':'Song','artist':'Artist','album':'Partial','files':['/music/song.flac'],'plex_album_thumb':'/library/metadata/pal/thumb'}]}
-        for target,value in [('playlist_bridge.accounts.root_repository',self.repo),('playlist_bridge.saved_views.personal_repository',self.repo),('playlist_bridge.api._config',self.config),('playlist_bridge.lidarr.config',{'enabled':True,'url':'http://lidarr'} )]:
+        for target,value in [('harmonia.accounts.root_repository',self.repo),('harmonia.saved_views.personal_repository',self.repo),('harmonia.api._config',self.config),('harmonia.lidarr.config',{'enabled':True,'url':'http://lidarr'} )]:
             mock=patch(target,return_value=value);mock.start();self.addCleanup(mock.stop)
-        mock=patch('playlist_bridge.inventory.current',return_value=(self.plex,self.lidarr));self.current=mock.start();self.addCleanup(mock.stop)
-        mock=patch('playlist_bridge.api._record_log');mock.start();self.addCleanup(mock.stop)
+        mock=patch('harmonia.inventory.current',return_value=(self.plex,self.lidarr));self.current=mock.start();self.addCleanup(mock.stop)
+        mock=patch('harmonia.api._record_log');mock.start();self.addCleanup(mock.stop)
         self.repo.save({'accounts':{'audit':self.user},'metadata_sources':{'settings':{'source_order':{'album_artwork':['apple','coverartarchive']}}},'local_artist_enrichment':{ARTIST:{'albums':[{'title':'Partial','artwork':'https://example.org/apple.jpg','url':'https://example.org/album'}]}}})
         library.invalidate();self.addCleanup(library.invalidate)
         app=FastAPI();library.register(app)
@@ -39,7 +39,7 @@ class AlbumReads(unittest.TestCase):
         pending=endpoint(*args)
         self.assertEqual(pending.status_code,202)
         job=Store(self.repo).get(json.loads(pending.body)['job_id'])
-        with patch('playlist_bridge.jobs.current',return_value=SimpleNamespace(store=Store(self.repo),id=job['id'],action='prepare_views')),patch('playlist_bridge.jobs.progress'):
+        with patch('harmonia.jobs.current',return_value=SimpleNamespace(store=Store(self.repo),id=job['id'],action='prepare_views')),patch('harmonia.jobs.progress'):
             saved_views.execute(job['payload'])
         return json.loads(endpoint(*args).body)
 
@@ -60,7 +60,7 @@ class AlbumReads(unittest.TestCase):
         with accounts.as_user(self.user):
             self.prepare(self.album,ALBUM)
             self.prepare(self.album,OTHER)
-            with patch('playlist_bridge.inventory.current',side_effect=AssertionError('Decoded inventory during HTTP read')),patch('playlist_bridge.track_bridge.links',side_effect=AssertionError('Rebuilt links during HTTP read')),patch('playlist_bridge.file_audit.report',side_effect=AssertionError('Rebuilt audit during HTTP read')):
+            with patch('harmonia.inventory.current',side_effect=AssertionError('Decoded inventory during HTTP read')),patch('harmonia.track_bridge.links',side_effect=AssertionError('Rebuilt links during HTTP read')),patch('harmonia.file_audit.report',side_effect=AssertionError('Rebuilt audit during HTTP read')):
                 for _ in range(3):
                     response=self.album(ALBUM)
                     self.assertEqual(response.status_code,200)
@@ -75,7 +75,7 @@ class AlbumReads(unittest.TestCase):
             self.assertEqual(stale.headers['X-Saved-View-Stale'],'true')
             row=saved_views.load_row(self.repo,stale.headers['X-Saved-View'])
             job=Store(self.repo).get(row['job_id'])
-            with patch('playlist_bridge.jobs.current',return_value=SimpleNamespace(store=Store(self.repo),id=job['id'],action='prepare_views')),patch('playlist_bridge.jobs.progress'):
+            with patch('harmonia.jobs.current',return_value=SimpleNamespace(store=Store(self.repo),id=job['id'],action='prepare_views')),patch('harmonia.jobs.progress'):
                 saved_views.execute(job['payload'])
             self.assertTrue(json.loads(self.album(ALBUM).body)['artwork'].startswith('/api/library/plex-albums/pal/image?v='))
 
@@ -93,7 +93,7 @@ class AlbumReads(unittest.TestCase):
     def test_image_index_reuse_and_revision_invalidation(self):
         response=SimpleNamespace(status_code=200,content=b'cover',headers={'Content-Type':'image/jpeg'},raise_for_status=lambda:None,iter_content=lambda **kw:iter([b'cover']),close=lambda:None)
         client=SimpleNamespace(base_url='http://plex',headers={},music_library_key='1')
-        with accounts.as_user(self.user),patch('playlist_bridge.api._health_plex',return_value=client),patch('requests.get',return_value=response),patch('playlist_bridge.track_bridge.links',side_effect=AssertionError('Images must not rebuild track links')):
+        with accounts.as_user(self.user),patch('harmonia.api._health_plex',return_value=client),patch('requests.get',return_value=response),patch('harmonia.track_bridge.links',side_effect=AssertionError('Images must not rebuild track links')):
             self.images('pal');self.images('pal')
             self.assertEqual(self.current.call_count,1)
             self.repo.save({'inventory':{'fixture':{'changed':True}}})

@@ -1,7 +1,7 @@
 import unittest
 from types import SimpleNamespace
 from unittest.mock import Mock
-from playlist_bridge.song_albums import containing_albums
+from harmonia.song_albums import containing_albums
 class SongAlbums(unittest.TestCase):
     def setUp(self):
         self.request=SimpleNamespace(title='Talk',artist='Khalid')
@@ -32,10 +32,10 @@ class SongAlbums(unittest.TestCase):
         self.assertEqual(containing_albums(None,[self.record],self.request,{},get),[]);get.assert_not_called()
 
     def test_featured_search_identity(self):
-        from playlist_bridge.song_albums import search_identity
+        from harmonia.song_albums import search_identity
         self.assertEqual(search_identity('Pitbull,\u00a0John Ryan','Fireball (feat. John Ryan)'),('Pitbull','Fireball'))
     def test_comma_band_name_without_explicit_feature_preserved(self):
-        from playlist_bridge.song_albums import search_identity
+        from harmonia.song_albums import search_identity
         self.assertEqual(search_identity('Earth, Wind & Fire','September'),('Earth, Wind & Fire','September'))
     def test_more_than_five_recordings_are_browsed(self):
         records=[{**self.record,'id':str(i)} for i in range(6)]
@@ -45,11 +45,11 @@ class SongAlbums(unittest.TestCase):
     def test_musicbrainz_query_uses_parsed_identity(self):
         import tempfile
         from pathlib import Path
-        from playlist_bridge.storage import Repository
-        from playlist_bridge import lidarr
+        from harmonia.storage import Repository
+        from harmonia import lidarr
         from unittest.mock import patch
         with tempfile.TemporaryDirectory() as directory:
             repo=Repository(Path(directory))
-            with patch('playlist_bridge.musicbrainz_client.get',return_value={'recordings':[]}) as get,patch('playlist_bridge.api._record_log'):
+            with patch('harmonia.musicbrainz_client.get',return_value={'recordings':[]}) as get,patch('harmonia.api._record_log'):
                 lidarr.musicbrainz_search(repo,{},lidarr.Lookup(artist='Pitbull, John Ryan',title='Fireball (feat. John Ryan)',fields_search=True))
             self.assertEqual(get.call_args.args[2]['query'],'recording:"Fireball" AND artist:"Pitbull"')

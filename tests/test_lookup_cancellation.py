@@ -1,9 +1,9 @@
 import tempfile,threading,time,unittest
 from pathlib import Path
 from unittest.mock import Mock,patch
-from playlist_bridge import jobs,musicbrainz_client
-from playlist_bridge.storage import Repository
-from playlist_bridge.musicbrainz_settings import ordered
+from harmonia import jobs,musicbrainz_client
+from harmonia.storage import Repository
+from harmonia.musicbrainz_settings import ordered
 
 class LookupCancellation(unittest.TestCase):
  def test_cancel_releases_identity_and_rejects_late_updates(self):
@@ -41,7 +41,7 @@ class LookupCancellation(unittest.TestCase):
   self.assertEqual(errors,[])
  def test_cancel_during_network_discards_response(self):
   ctx=Mock();ctx.checkpoint.side_effect=[None,jobs.Cancelled()]
-  with patch('playlist_bridge.jobs.current',return_value=ctx),patch.object(musicbrainz_client._session,'get',return_value=Mock(json=lambda:{'late':True})):
+  with patch('harmonia.jobs.current',return_value=ctx),patch.object(musicbrainz_client._session,'get',return_value=Mock(json=lambda:{'late':True})):
    with self.assertRaises(jobs.Cancelled):musicbrainz_client._request('http://mirror','recording',{},False,(1,1))
  def test_own_releases_first_and_studio_before_live(self):
   rows=[{'title':'Compilation','type':'Album','other_release':True,'secondary_types':['Compilation']},{'title':'Single','type':'Single','other_release':False},{'title':'Studio','type':'Album','other_release':False},{'title':'Live','type':'Album','other_release':True,'secondary_types':['Live']}]

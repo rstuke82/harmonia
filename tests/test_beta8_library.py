@@ -1,8 +1,8 @@
 import unittest
 
-from playlist_bridge.album_catalog import catalog_rows, library_state
-from playlist_bridge.jobs import worker_for
-from playlist_bridge.tasks import DEFINITIONS
+from harmonia.album_catalog import catalog_rows, library_state
+from harmonia.jobs import worker_for
+from harmonia.tasks import DEFINITIONS
 
 
 ARTIST = '11111111-1111-1111-1111-111111111111'

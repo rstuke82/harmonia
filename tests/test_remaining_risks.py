@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import Mock,patch
 from fastapi import HTTPException
-from playlist_bridge import accounts,jobs,redirect_policy as policy
+from harmonia import accounts,jobs,redirect_policy as policy
 import test_30 as multi
 
 class Redirects(unittest.TestCase):
@@ -45,7 +45,7 @@ class Redirects(unittest.TestCase):
         for response in responses:response.close.assert_called_once()
     def test_service_calls_explicitly_disable_automatic_redirects(self):
         for filename in ('accounts.py','artwork_sync.py','plex_client.py'):
-            tree=ast.parse((Path(__file__).parents[1]/'playlist_bridge'/filename).read_text())
+            tree=ast.parse((Path(__file__).parents[1]/'harmonia'/filename).read_text())
             for node in ast.walk(tree):
                 if isinstance(node,ast.Call) and isinstance(node.func,ast.Attribute) and isinstance(node.func.value,ast.Name) and node.func.value.id=='requests' and node.func.attr in ('get','post','put','delete','request'):
                     self.assertTrue(any(k.arg=='allow_redirects' and isinstance(k.value,ast.Constant) and k.value.value is False for k in node.keywords),filename)
@@ -77,7 +77,7 @@ class Quotas(unittest.TestCase):
 class DependencyLock(unittest.TestCase):
     def test_bootstrap_checks_included_lock_and_rejects_cycles(self):
         import tempfile
-        from playlist_bridge.bootstrap import _parse_requirements_file
+        from harmonia.bootstrap import _parse_requirements_file
         with tempfile.TemporaryDirectory() as folder:
             root=Path(folder);(root/'requirements.txt').write_text('-r requirements.lock\n');(root/'requirements.lock').write_text('requests==2.34.2\n')
             parsed=_parse_requirements_file(root/'requirements.txt');self.assertEqual(parsed[0]['name'],'requests');self.assertEqual(parsed[0]['operator'],'==')
@@ -85,7 +85,7 @@ class DependencyLock(unittest.TestCase):
             with self.assertRaises(ValueError):_parse_requirements_file(root/'requirements.txt')
     def test_container_health_probe_works_without_allowing_remote_http(self):
         from test_browser_security import call,BrowserHardening
-        from playlist_bridge.browser_security import BrowserSecurity
+        from harmonia.browser_security import BrowserSecurity
         import os
         app=BrowserSecurity(BrowserHardening.target)
         # Use a normal ASGI target without authentication side effects.

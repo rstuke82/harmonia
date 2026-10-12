@@ -1,5 +1,5 @@
 import unittest
-from playlist_bridge.request_confirmation import apply
+from harmonia.request_confirmation import apply
 class Confirmation(unittest.TestCase):
     def setUp(self):
         self.record={'webhook_checked_at':1,'plex_confirmation':{'server':'s','webhook_at':1,'checked_at':10,'found':12,'expected':12}}

@@ -14,7 +14,7 @@ Bring your playlists into your own music library. Harmonia matches source tracks
 - **Album requests:** Find releases using MusicBrainz and request albums through an optional Lidarr integration.
 - **Library review:** Browse saved library inventory, review availability and associations, and investigate library issues.
 - **Multiple users:** Plex sign-in, personal playlists, administrator-managed permissions, and album request approval.
-- **Background work:** Scheduled tasks, visible job progress, activity logs, and persistent job history.
+- **Background work:** Scheduled tasks, visible job progress, activity logs, and persistent job history. Interrupted bulk metadata refreshes resume after restart, retaining completed artists and retrying unfinished or failed artists.
 - **Responsive interface:** Use Harmonia on desktop or mobile, with an installable web app.
 
 Harmonia syncs playlists to music you can access in Plex. It does not download audio from Spotify or Apple Music. Optional Lidarr requests use your existing Lidarr download and import setup.
@@ -129,7 +129,7 @@ Each playlist can follow the server schedule, use a custom schedule, or sync man
 
 Discover brings together recently added Plex albums, recent requests, and enabled recommendation features. Library provides album and track details from saved inventory.
 
-Saved inventory keeps normal browsing from requiring a full live scan. After adding or changing music, check the inventory timestamp and refresh the relevant service scan in Settings → Tasks if needed.
+Saved inventory keeps normal browsing from requiring a full live scan. After adding or changing music, check the inventory timestamp and refresh the relevant service scan in Settings → Jobs & Cache if needed.
 
 Issues provides diagnostic findings for review. An association problem, partial import, or duplicate candidate is evidence to investigate rather than permission to remove music.
 
@@ -141,7 +141,7 @@ Choose Request Album, review the release results, and select the album you want.
 
 **Imported into Lidarr and available in Plex are separate stages.** Harmonia shows Waiting for Plex while an imported album is awaiting Plex confirmation, Partially available when only part is available, and Available when full availability is confirmed. Needs attention indicates a failure or condition requiring review.
 
-For timely import updates, configure Lidarr's webhook using the endpoint and authentication details provided by Harmonia. The endpoint must be reachable from Lidarr. Inventory scans and polling also contribute to saved availability; Plex still needs to discover imported files.
+For timely import updates, configure Lidarr's webhook using the endpoint and authentication details provided by Harmonia. In Account → API Access, enable “Receive Lidarr webhooks” for the administrator key used by Lidarr. The endpoint must be reachable from Lidarr. Inventory scans and polling also contribute to saved availability; Plex still needs to discover imported files.
 
 ## Configuration and storage
 
@@ -164,7 +164,7 @@ Uncomment the example music volume and replace `/path/to/music` with your librar
 
 Configure the corresponding path mapping in Harmonia's library-management settings. A path reported by Lidarr or Plex may differ from the path visible inside Harmonia; for example, the same files may appear under `/data/media/music` in one service and `/music` in another.
 
-Local scans and duplicate verification provide diagnostic evidence. They do not delete, move, or retag music files. Start scans from Settings → Tasks and review the results in Issues.
+Local scans and duplicate verification provide diagnostic evidence. They do not delete, move, or retag music files. Start scans from Settings → Jobs & Cache and review the results in Issues.
 
 ## Updates and backups
 
@@ -197,13 +197,17 @@ Configure `HARMONIA_HTTPS_ONLY=true` and set `HARMONIA_TRUSTED_PROXIES` to the a
 
 See [deployment and security guidance](SECURITY-DEPLOYMENT.md) for forwarding headers, proxy networking, and verification. Protect configuration files, credentials, and backups as carefully as the application itself.
 
+## API access
+
+Personal API keys start read-only. Enable playlist or album-request permissions in Account → API Access when needed for automation. Only administrators can enable Lidarr webhook access. Existing keys without saved permissions become read-only; enable the required permissions before using those integrations. Changing permissions keeps the same key. Keys never expire; regenerating a key immediately disables its previous value. Administrator settings and key management require a browser session.
+
 ## Troubleshooting
 
 | Problem | What to check |
 | --- | --- |
 | Container cannot write configuration | Confirm the host configuration folder is writable by UID/GID `10001`. Change ownership only on Harmonia's configuration folder. |
 | Plex or Lidarr connection fails | Test from Settings. Confirm the URL is reachable from the container and includes any configured URL base. |
-| Library is empty after setup | Check the initial scan in Jobs and retry failed scans from Settings → Tasks. |
+| Library is empty after setup | Check the initial scan in Jobs and retry failed scans from Settings → Jobs & Cache. |
 | Imported album is waiting for Plex | Confirm Plex has scanned the files and that the selected library and path mappings are correct. Review the related job and refresh Plex inventory if needed. |
 | Playlist track remains missing | Review its candidates, duration, source metadata, and availability in the signed-in user's Plex library. |
 | Local scanning cannot see music | Check the read-only mount and the path mapping visible inside Harmonia. |

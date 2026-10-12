@@ -26,3 +26,5 @@ import './pass-20261008.css'
 import './links-20261009.css'
 
 import './discover-layout.css'
+
+import './navigation.css'

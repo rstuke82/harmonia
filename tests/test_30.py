@@ -1,4 +1,4 @@
-from playlist_bridge.config import Config
+from harmonia.config import Config
 import asyncio
 import hashlib
 import json
@@ -6,9 +6,9 @@ import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
-from playlist_bridge import accounts, api, library, lidarr
-from playlist_bridge.storage import Repository
-from playlist_bridge.jobs import Store, Manager
+from harmonia import accounts, api, library, lidarr
+from harmonia.storage import Repository
+from harmonia.jobs import Store, Manager
 
 
 class MultiUser(unittest.TestCase):
@@ -18,9 +18,9 @@ class MultiUser(unittest.TestCase):
         self.settings={'plex':{'url':'http://plex','token':'OWNER_SECRET','music_library_key':'1'}}
         (self.path/'config.json').write_text(json.dumps(self.settings))
         self.repo=Repository(self.path)
-        for target,value in [('playlist_bridge.accounts.root_repository',self.repo),('playlist_bridge.discover.root_repository',self.repo)]:
+        for target,value in [('harmonia.accounts.root_repository',self.repo),('harmonia.discover.root_repository',self.repo)]:
             p=patch(target,return_value=value);p.start();self.addCleanup(p.stop)
-        p=patch('playlist_bridge.config.CONFIG_FILE',self.path/'config.json');p.start();self.addCleanup(p.stop)
+        p=patch('harmonia.config.CONFIG_FILE',self.path/'config.json');p.start();self.addCleanup(p.stop)
         self.repo.save({'lidarr':{'settings':{'enabled':True,'url':'http://lidarr','api_key':'test'}}})
         self.a={'id':'11','name':'Alice','admin':False,'plex_token':'ALICE_SECRET','can_request':True,'auto_approve':True,'verified_at':9999999999}
         self.b={'id':'12','name':'Bob','admin':False,'plex_token':'BOB_SECRET','can_request':False,'verified_at':9999999999}
@@ -77,7 +77,7 @@ class MultiUser(unittest.TestCase):
     def test_http_auth_admin_boundary_and_csrf(self):
         for path in ('/api/playlists','/api/jobs','/api/library','/api/settings/lidarr','/api/users'):
             status,_=asyncio.run(self.http(path));self.assertEqual(status,401,path)
-        for path in ('/api/settings/lidarr','/api/users','/api/backups','/api/lidarr/search'):
+        for path in ('/api/settings/lidarr','/api/users','/api/backups','/api/settings/plex'):
             status,_=asyncio.run(self.http(path,user=self.a));self.assertEqual(status,403,path)
         status,_=asyncio.run(self.http('/api/jobs',method='POST',user=self.a,csrf=False));self.assertEqual(status,403)
         status,body=asyncio.run(self.http('/api/health'));self.assertEqual(status,200);self.assertEqual(json.loads(body),{'status':'ok'})
@@ -85,7 +85,7 @@ class MultiUser(unittest.TestCase):
         status,body=asyncio.run(self.http('/api/library',user=self.a));self.assertEqual(status,202);self.assertIn('job_id',json.loads(body))
 
     def test_pin_login_only_owner_can_initialize(self):
-        self.repo.save({'accounts':{}})
+        self.repo.save({'accounts':{}},replace=True)
         responses=[{'id':11,'username':'Alice','email':'a@example.com'}, {'MediaContainer':{'machineIdentifier':'server'}}, [{'clientIdentifier':'server','provides':'server','accessToken':'token','owned':False}],{'MediaContainer':{'Directory':[{'key':'1','type':'artist'}]}}]
         with patch.object(accounts,'plex_json',side_effect=responses):
             with self.assertRaises(Exception):accounts.verify('token')
@@ -118,8 +118,8 @@ class MultiUser(unittest.TestCase):
         self.assertFalse(any(key.startswith('_') for key in full))
 
     def test_artist_can_be_manually_linked_to_a_plex_inventory_artist(self):
-        from playlist_bridge.inventory import identity
-        from playlist_bridge.lidarr_requests import server_id
+        from harmonia.inventory import identity
+        from harmonia.lidarr_requests import server_id
         from types import SimpleNamespace
         plex_client=SimpleNamespace(base_url='http://plex',music_library_key='1',headers={'X-Plex-Token':'OWNER_SECRET','Accept':'application/json'})
         lidarr_cfg=lidarr.config(self.repo)
@@ -130,7 +130,7 @@ class MultiUser(unittest.TestCase):
             {'id':'lidarr-7','name':'(həd) p.e.','mbid':'19516266-e5d9-4774-b749-812bb76a6559'}]})
         # Metadata routes were registered with the real repository resolver;
         # direct its runtime lookup at this isolated installation as well.
-        with patch('playlist_bridge.runtime_paths.CONFIG_DIR',self.path):
+        with patch('harmonia.runtime_paths.CONFIG_DIR',self.path):
             status,body=asyncio.run(self.http('/api/library/artists/lidarr-7/links/plex/search',method='POST',user=self.admin,body={}))
             self.assertEqual(status,200);results=json.loads(body);self.assertEqual(results[0]['id'],'plex-42')
             self.assertEqual(results[0]['album_count'],2);self.assertEqual(results[0]['track_count'],2)
@@ -157,25 +157,25 @@ class MultiUser(unittest.TestCase):
         with accounts.as_user(self.a):self.assertEqual(len(api.job_store().list()),1)
 
     def test_backup_contains_and_restores_personal_databases(self):
-        from playlist_bridge import backups
+        from harmonia import backups
         from zipfile import ZipFile
         with accounts.as_user(self.a):
             c=Config();c.config['playlists']=[{'source_id':'saved'}];c.save()
         result=backups.create(self.repo)
         with ZipFile(backups.path_for(self.repo,result['backup'])) as z:
-            self.assertIn('users/11/playlist-bridge.db',z.namelist())
+            self.assertIn('users/11/harmonia.db',z.namelist())
         with accounts.as_user(self.a):
             c=Config();c.config['playlists']=[];c.save()
         backups.restore(self.repo,result['backup'])
         with accounts.as_user(self.a):self.assertEqual(Config().config['playlists'],[{'source_id':'saved'}])
 
     def test_musicbrainz_recording_release_date_fallback(self):
-        from playlist_bridge import lidarr
+        from harmonia import lidarr
         from unittest.mock import Mock
         response=Mock(status_code=200)
         response.json.return_value={'recordings':[{'id':'recording','title':'Song','artist-credit':[{'name':'Artist'}],'releases':[{'date':'1995-05-01','release-group':{'id':'group','title':'Album','primary-type':'Album'}},{'date':'1998','release-group':{'id':'group','title':'Album','primary-type':'Album'}}]}]}
         response.json.return_value['releases']=[{**r,'artist-credit':[{'name':'Artist'}]} for r in response.json.return_value['recordings'][0]['releases']]
-        with patch('playlist_bridge.musicbrainz_client._session.get',return_value=response),patch('playlist_bridge.musicbrainz_client.time.sleep'),patch.object(api,'_record_log'):
+        with patch('harmonia.musicbrainz_client._session.get',return_value=response),patch('harmonia.musicbrainz_client.time.sleep'),patch.object(api,'_record_log'):
             result=lidarr.musicbrainz_search(self.repo,{},lidarr.Lookup(title='Song',artist='Artist',provider='musicbrainz'),test=True)
         self.assertEqual(result['rows'][0]['year'],'1995')
 
@@ -185,9 +185,9 @@ class MultiUser(unittest.TestCase):
         self.assertNotIn(b'OWNER_SECRET',body);self.assertNotIn(b'ALICE_SECRET',body)
 
     def test_member_inventory_never_inherits_owner_plex_snapshot(self):
-        from playlist_bridge.inventory import current,identity
+        from harmonia.inventory import current,identity
         from types import SimpleNamespace
-        from playlist_bridge.lidarr import state_put
+        from harmonia.lidarr import state_put
         client=SimpleNamespace(base_url='http://plex',music_library_key='1',headers={'X-Plex-Token':'OWNER_SECRET','Accept':'application/json'})
         state_put(self.repo,'inventory','plex',{'identity':identity(client),'rows':[{'title':'Private owner track'}],'checked_at':1})
         with accounts.as_user(self.a):

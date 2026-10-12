@@ -1,9 +1,9 @@
-from playlist_bridge import network as runtime_requests
-from playlist_bridge.apple_music_source import AppleMusicAPI
+from harmonia import network as runtime_requests
+from harmonia.apple_music_source import AppleMusicAPI
 import unittest
 from unittest.mock import Mock
-from playlist_bridge.playlist_urls import canonical_playlist, apple_playlist_get
-from playlist_bridge import api
+from harmonia.playlist_urls import canonical_playlist, apple_playlist_get
+from harmonia import api
 
 
 class PlaylistURLSecurity(unittest.TestCase):

@@ -3,12 +3,12 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock,patch
 from contextlib import nullcontext
-from playlist_bridge.storage import Repository
-from playlist_bridge.jobs import Store
-from playlist_bridge import tasks,sync_policy,playlist_schedules,queued_settings,lidarr_downloads
-from playlist_bridge.lidarr import state_put
-from playlist_bridge.lidarr_requests import server_id
-from playlist_bridge.playlist_description import render,MARKER
+from harmonia.storage import Repository
+from harmonia.jobs import Store
+from harmonia import tasks,sync_policy,playlist_schedules,queued_settings,lidarr_downloads
+from harmonia.lidarr import state_put
+from harmonia.lidarr_requests import server_id
+from harmonia.playlist_description import render,MARKER
 
 class Beta3(unittest.TestCase):
  def setUp(self):
@@ -38,14 +38,14 @@ class Beta3(unittest.TestCase):
   state_put(self.repo,'playlist_schedules','spotify:3',{'mode':'custom','days':[0],'hour':2,'minute':0,'timezone':'UTC','next_run':'2000-01-01T00:00:00+00:00'})
   with self.repo.connect() as db:db.execute("UPDATE schedules SET enabled=1,next_run='2000-01-01T00:00:00+00:00' WHERE action='sync' AND scope='all'")
   config=SimpleNamespace(config={'playlists':self.playlists})
-  with patch('playlist_bridge.api._config',return_value=config):
+  with patch('harmonia.api._config',return_value=config):
    self.store.due();playlist_schedules.due(self.store)
   with self.repo.connect() as db:jobs=[json.loads(r[0]) for r in db.execute("SELECT payload FROM jobs WHERE action='sync'")]
   self.assertEqual(len(jobs),2);self.assertEqual({tuple(j['playlist_keys']) for j in jobs},{('spotify:1',),('spotify:3',)})
  def test_rename_is_latest_value_and_keeps_identity(self):
   config=SimpleNamespace(config={'playlists':self.playlists},save=Mock())
   plex=SimpleNamespace(base_url='http://plex',headers={})
-  with patch('playlist_bridge.api._config',return_value=config),patch('playlist_bridge.api.job_store',return_value=self.store),patch('playlist_bridge.api._health_plex',return_value=plex),patch('playlist_bridge.process_lock.ProcessLock',return_value=nullcontext()),patch('requests.put') as put:
+  with patch('harmonia.api._config',return_value=config),patch('harmonia.api.job_store',return_value=self.store),patch('harmonia.api._health_plex',return_value=plex),patch('harmonia.process_lock.ProcessLock',return_value=nullcontext()),patch('requests.put') as put:
    first=queued_settings.enqueue(['spotify:1'],{'name':'First'})
    last=queued_settings.enqueue(['spotify:1'],{'name':'Heavy Rotation — Ryan'})
    self.assertEqual(first['job_id'],last['job_id']);queued_settings.execute()
@@ -54,24 +54,24 @@ class Beta3(unittest.TestCase):
   self.assertEqual(self.playlists[0]['custom_name'],'Heavy Rotation — Ryan');self.assertFalse(self.repo.load('pending_playlist_settings'))
  def test_description_replaces_summary(self):
   p={'source_url':'https://example.com/playlist','last_synced':'2026-09-24T12:00:00+00:00'}
-  first=render('Source notes',p,100,90,8,2).replace(MARKER,'\n\n— Playlist Bridge —\n');second=render(first,p,100,95,3,2)
+  first=render('Source notes',p,100,90,8,2);second=render(first,p,100,95,3,2)
   self.assertEqual(second.count(MARKER),1);self.assertTrue(second.startswith('Source notes'))
   self.assertIn('95 matched',second);self.assertNotIn('90 matched',second)
  def test_health_scope_retains_selection(self):
-  from playlist_bridge.api import validated_payload
+  from harmonia.api import validated_payload
   with self.assertRaises(ValueError):validated_payload('health',{'scope':'favorites'})
   config=SimpleNamespace(config={'playlists':self.playlists})
-  with patch('playlist_bridge.api._config',return_value=config):
+  with patch('harmonia.api._config',return_value=config):
    self.assertEqual(validated_payload('health',{'scope':'selected','playlist_keys':['spotify:1']}),{'scope':'selected','playlist_keys':['spotify:1']})
  def test_manual_sync_includes_custom_and_health_retains_scope(self):
-  from playlist_bridge.api import _execute_job
+  from harmonia.api import _execute_job
   config=SimpleNamespace(config={'playlists':self.playlists},repository=self.repo)
   sync_policy.migrate(self.store)
   state_put(self.repo,'playlist_schedules','spotify:3',{'mode':'custom'})
-  with patch('playlist_bridge.api._config',return_value=config),patch('playlist_bridge.api.sync_one',return_value={'summary':{}}) as sync:
+  with patch('harmonia.api._config',return_value=config),patch('harmonia.api.sync_one',return_value={'summary':{}}) as sync:
    _execute_job('sync',{'scope':'all'})
    self.assertEqual(sync.call_count,3)
-  with patch('playlist_bridge.api._config',return_value=config),patch('playlist_bridge.api._health_batch',return_value={}) as health:
+  with patch('harmonia.api._config',return_value=config),patch('harmonia.api._health_batch',return_value={}) as health:
    _execute_job('health',{'scope':'selected','playlist_keys':['spotify:1']})
    self.assertEqual(len(health.call_args.args[0]),1)
    _execute_job('health',{'scope':'all'})
@@ -80,7 +80,7 @@ class Beta3(unittest.TestCase):
   cfg={'url':'http://lidarr','api_key':'secret','enabled':True}
   state_put(self.repo,'lidarr_requests','mbid',{'server':server_id(cfg),'lidarr_id':1546,'title':'The Power','status':'added','sources':[]})
   client=Mock();client.call.side_effect=lambda method,path,**kw:{'records':[]} if path=='queue' else []
-  with patch('playlist_bridge.lidarr.Client',return_value=client),patch('playlist_bridge.api._record_log'):
+  with patch('harmonia.lidarr.Client',return_value=client),patch('harmonia.api._record_log'):
    lidarr_downloads.snapshot(self.repo,cfg,force=True)
    r=self.repo.load('lidarr_requests')['mbid'];self.assertIsNone(r['lidarr_id']);self.assertEqual(r['lidarr_url'],'');self.assertEqual(r['status'],'not_in_lidarr')
    client.call.side_effect=lambda method,path,**kw:{'records':[]} if path=='queue' else [{'id':2000,'foreignAlbumId':'mbid','statistics':{}}]

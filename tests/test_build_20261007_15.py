@@ -5,11 +5,11 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 from fastapi import FastAPI
-from playlist_bridge.album_identity import Albums
-from playlist_bridge.album_catalog import catalog_rows,secondary_types
-from playlist_bridge.file_audit import inspect,report
-from playlist_bridge.file_tools import Settings
-from playlist_bridge import library,accounts
+from harmonia.album_identity import Albums
+from harmonia.album_catalog import catalog_rows,secondary_types
+from harmonia.file_audit import inspect,report
+from harmonia.file_tools import Settings
+from harmonia import library,accounts
 import test_build_20261007_14 as previous
 from test_build_20261007_14 import ALBUM,OTHER,ARTIST
 
@@ -22,7 +22,7 @@ class AlbumEvidence(unittest.TestCase):
                      'rename_preview':{'rows':[],'errors':[],'checked_at':time.time()},'tracks':[{'id':'1','album_id':ALBUM,'artist':'Various Artists','album':'Tribute','file':'/music/one.flac','recording_id':'r'}]}
         self.tags={'title':'Song','artist':'Performer','album_artist':'Various Artists','album':'Tribute','recording_id':'r','codec':'FLAC'}
     def scan(self,previous=None,verify=True):
-        with patch('playlist_bridge.local_library.read_tags',return_value=self.tags):return inspect(self.cfg,self.lidarr,{},previous,verify)
+        with patch('harmonia.local_library.read_tags',return_value=self.tags):return inspect(self.cfg,self.lidarr,{},previous,verify)
     def old(self,album=True):
         source={'issue':'Identical files','files':[str(self.root/'one.flac'),str(self.root/'two.flac')],'evidence':{'sha256':'verified'},'reason':'Hashes match.'}
         if album:source['album_id']=ALBUM
@@ -66,7 +66,7 @@ class AlbumEvidence(unittest.TestCase):
         for name in ['one.flac','two.flac']:(self.root/name).write_bytes(b'same audio')
         before=self.scan()
         for row in before['files'].values():row['tags'].pop('album_artist')
-        with patch('playlist_bridge.local_library.read_tags',return_value=self.tags) as tags:
+        with patch('harmonia.local_library.read_tags',return_value=self.tags) as tags:
             inspect(self.cfg,self.lidarr,{},before,False)
         self.assertEqual(tags.call_count,2)
 
@@ -113,7 +113,7 @@ class IssuesNavigation(previous.AlbumReads):
         routes=self.endpoints();endpoint=routes['/api/library/plex-albums/{plex_album_id}/lidarr-link']
         import inspect as reflection
         body_type=reflection.signature(endpoint).parameters['body'].annotation
-        with accounts.as_user(self.user),patch('playlist_bridge.lidarr.Client.call',side_effect=AssertionError('No Lidarr API mutations during association')):
+        with accounts.as_user(self.user),patch('harmonia.lidarr.Client.call',side_effect=AssertionError('No Lidarr API mutations during association')):
             result=endpoint('only',body_type(album_id=ALBUM))
             detail=self.prepare(routes['/api/library/albums/{album_id}'],ALBUM)
             issues=self.prepare(routes['/api/library/issues'])
@@ -131,28 +131,28 @@ class IssuesNavigation(previous.AlbumReads):
 
 class InternalPreparation(unittest.TestCase):
     def test_internal_jobs_hidden_from_activity_and_history_but_diagnostic_lane_remains(self):
-        from playlist_bridge import api,jobs,admin_activity
-        from playlist_bridge.storage import Repository
+        from harmonia import api,jobs,admin_activity
+        from harmonia.storage import Repository
         tmp=tempfile.TemporaryDirectory();self.addCleanup(tmp.cleanup);repo=Repository(Path(tmp.name));store=jobs.Store(repo)
         internal=store.enqueue('prepare_views',{'key':'fixture'});visible=store.enqueue('health',{'scope':'all'})
-        with patch('playlist_bridge.api.job_store',return_value=store),accounts.as_user({'id':'2','admin':False}):
+        with patch('harmonia.api.job_store',return_value=store),accounts.as_user({'id':'2','admin':False}):
             self.assertEqual([j['id'] for j in api.list_jobs()],[visible])
-        with patch('playlist_bridge.admin_activity.stores',return_value=[({'id':'1','name':'Owner'},store)]):
+        with patch('harmonia.admin_activity.stores',return_value=[({'id':'1','name':'Owner'},store)]):
             result=admin_activity.history();diagnostic=admin_activity.history(worker='views')
         self.assertEqual(result['total'],1);self.assertEqual(result['rows'][0]['id'],visible)
         self.assertEqual(diagnostic['total'],1);self.assertEqual(diagnostic['rows'][0]['id'],internal)
     def test_download_status_and_playlist_changes_do_not_invalidate_library_pages(self):
-        from playlist_bridge import saved_views
-        from playlist_bridge.storage import Repository
+        from harmonia import saved_views
+        from harmonia.storage import Repository
         tmp=tempfile.TemporaryDirectory();self.addCleanup(tmp.cleanup);repo=Repository(Path(tmp.name))
-        with patch('playlist_bridge.saved_views.root_repository',return_value=repo):
+        with patch('harmonia.saved_views.root_repository',return_value=repo):
             before=saved_views.revision(repo,saved_views.LIBRARY)
             repo.save({'lidarr_requests':{'a':{'download_checked_at':time.time()}},'health_history':{'check':{}},'mapping':{'playlist':{}}})
             self.assertEqual(before,saved_views.revision(repo,saved_views.LIBRARY))
             repo.save({'inventory':{'lidarr':{'rows':[]}}})
             self.assertNotEqual(before,saved_views.revision(repo,saved_views.LIBRARY))
     def test_existing_review_survives_canonical_identity_enrichment(self):
-        from playlist_bridge.file_audit import decorate
+        from harmonia.file_audit import decorate
         row={'issue':'Identical files','files':['a','b'],'evidence':{'sha256':'same'}}
         class Repo:
             reviews={}

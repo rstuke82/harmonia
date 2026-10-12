@@ -1,10 +1,10 @@
-from playlist_bridge.config import Config
+from harmonia.config import Config
 import unittest
 from unittest.mock import patch
 import test_30
-from playlist_bridge import api, accounts
-from playlist_bridge.track_routes import inspect
-from playlist_bridge.playlist_overlays import entries
+from harmonia import api, accounts
+from harmonia.track_routes import inspect
+from harmonia.playlist_overlays import entries
 
 class HealthMembership(test_30.MultiUser):
     def config(self,source=None,health=None,overlay=None):

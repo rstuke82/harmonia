@@ -3,9 +3,9 @@ import unittest
 from pathlib import Path
 from threading import Event
 from unittest.mock import Mock, patch
-from playlist_bridge import api, jobs, lidarr
-from playlist_bridge.storage import Repository
-from playlist_bridge.song_albums import containing_albums
+from harmonia import api, jobs, lidarr
+from harmonia.storage import Repository
+from harmonia.song_albums import containing_albums
 
 class SearchJobs(unittest.TestCase):
     def setUp(self):
@@ -79,7 +79,7 @@ class SearchAccess(unittest.TestCase):
         self.assertEqual(jobs.Store(self.repo).get(jid)['status'],'queued')
     def test_delegated_admin_uses_server_job_scope_and_csrf(self):
         delegated={**self.a,'admin':True}
-        from playlist_bridge import accounts
+        from harmonia import accounts
         accounts.put('accounts',delegated['id'],delegated)
         path='/api/lidarr/search-jobs'
         code,_=asyncio.run(self.http(path,'POST',delegated,False,{'title':'Song','artist':'Artist'}))

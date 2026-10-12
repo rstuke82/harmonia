@@ -11,9 +11,9 @@ from pathlib import Path
 from unittest.mock import patch
 from fastapi import FastAPI, HTTPException
 from starlette.requests import Request
-from playlist_bridge import accounts, login_security as security
-from playlist_bridge.jobs import Store
-from playlist_bridge.storage import Repository
+from harmonia import accounts, login_security as security
+from harmonia.jobs import Store
+from harmonia.storage import Repository
 
 
 class LoginSecurity(unittest.TestCase):
@@ -62,7 +62,7 @@ class LoginSecurity(unittest.TestCase):
                 self.assertEqual(accounts.users(),{})
             user=accounts.verify('OWNER',setup_hash=grant,choose_library=True,library_key='8')
         self.assertTrue(user['admin'])
-        from playlist_bridge.storage import read_json
+        from harmonia.storage import read_json
         self.assertEqual(read_json(self.repo.directory/'config.json')['plex']['music_library_key'],'8')
         self.assertEqual(len(Store(self.repo).list()),1)
 
@@ -184,17 +184,16 @@ class LoginSecurity(unittest.TestCase):
             with self.assertRaises(HTTPException):self.route('/api/auth/poll')(req)
         self.assertEqual(self.repo.load_one('login_pins',key)['lease_until'],0)
 
-    def test_ip_global_and_concurrent_limits_return_retry_after(self):
+    def test_ip_limits_and_concurrency_do_not_share_a_global_minute_quota(self):
         key=self.pin()
         with patch.object(security.time,'time',return_value=100):
             for _ in range(60):security.claim_poll(self.repo,key,'same-ip')
             with self.assertRaises(HTTPException) as error:security.claim_poll(self.repo,key,'same-ip')
             self.assertEqual(error.exception.status_code,429);self.assertIn('Retry-After',error.exception.headers)
             for i in range(240):security.claim_poll(self.repo,key,'ip-'+str(i))
-            with self.assertRaises(HTTPException) as error:security.claim_poll(self.repo,key,'new-ip')
-            self.assertEqual(error.exception.status_code,429)
+            self.assertIsNone(security.claim_poll(self.repo,key,'new-ip'))
         with patch.object(security.time,'time',return_value=161):self.assertTrue(security.claim_poll(self.repo,key,'same-ip') is None) # existing live lease is still shared
-        self.repo.save({'auth_limits':{},'login_pins':{}})
+        self.repo.save({'auth_limits':{},'login_pins':{}},replace=True)
         with patch.object(security.time,'time',return_value=200):
             for i in range(security.MAX_ACTIVE_POLLS):self.assertTrue(security.claim_poll(self.repo,self.pin(str(i)),str(i)))
             with self.assertRaises(HTTPException) as error:security.claim_poll(self.repo,self.pin('extra'),'extra')

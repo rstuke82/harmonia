@@ -7,9 +7,9 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch, Mock
-from playlist_bridge import api, saved_views, jobs, accounts
-from playlist_bridge.storage import Repository
-from playlist_bridge.lidarr import state_put
+from harmonia import api, saved_views, jobs, accounts
+from harmonia.storage import Repository
+from harmonia.lidarr import state_put
 
 
 class SavedViewDemand(unittest.TestCase):
@@ -34,7 +34,7 @@ class SavedViewDemand(unittest.TestCase):
 
     def finish(self,response):
         ident=json.loads(response.body)['job_id'];job=self.store.get(ident)
-        with patch('playlist_bridge.jobs.current',return_value=SimpleNamespace(store=self.store,id=ident,action="prepare_views",user_id=None)),patch('playlist_bridge.jobs.progress'):
+        with patch('harmonia.jobs.current',return_value=SimpleNamespace(store=self.store,id=ident,action="prepare_views",user_id=None)),patch('harmonia.jobs.progress'):
             saved_views.execute(job['payload'])
         self.store.update(ident,status='completed')
         return ident
@@ -47,7 +47,7 @@ class SavedViewDemand(unittest.TestCase):
             saved_views.tick(self.store)
 
     def test_poll_bookkeeping_does_not_invalidate_history_but_requests_still_change(self):
-        actual_deps=saved_views._providers['listening history v20261008_8'][1]
+        actual_deps=saved_views._providers['listening history v20261011_77'][1]
         history=saved_views.revision(self.repo,actual_deps)
         discovery=saved_views.revision(self.repo,saved_views.DISCOVER)
         requests=saved_views.revision(self.repo,saved_views.REQUESTS)
@@ -82,7 +82,7 @@ class SavedViewDemand(unittest.TestCase):
         self.assertEqual(len([j for j in self.store.list() if j['status']=='queued']),1)
         self.assertEqual(self.store.get(ident)['payload']['revision'],saved_views.revision(self.repo,saved_views._providers['F23 album'][1]))
         self.assertEqual(len(calls),1,'HTTP reads must not run providers')
-        with patch('playlist_bridge.jobs.current',return_value=SimpleNamespace(store=self.store,id=ident,action="prepare_views",user_id=None)),patch('playlist_bridge.jobs.progress'):
+        with patch('harmonia.jobs.current',return_value=SimpleNamespace(store=self.store,id=ident,action="prepare_views",user_id=None)),patch('harmonia.jobs.progress'):
             saved_views.execute(self.store.get(ident)['payload'])
         self.store.update(ident,status='completed')
         self.assertEqual(json.loads(read().body)['inventory']['plex']['value'],2)

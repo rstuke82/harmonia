@@ -37,7 +37,7 @@ const storage={},globals={artist:'',query:'',statuses:[],releases:[],secondaryTy
 for(const [setter,key] of [['setQuery','query'],['setStatuses','statuses'],['setReleases','releases'],['setSecondaryTypes','secondaryTypes']])globals[setter]=v=>globals[key]=v;
 const included=expression('('+predicate+')',globals),compilation={artist:'A',title:'Album',secondary_types:['Compilation']};assert.equal(included(compilation),false);
 const clear=find('Library.tsx',n=>ts.isFunctionDeclaration(n)&&n.name?.text==='clearAlbumFilters');expression(clear+';clearAlbumFilters()',globals);
-assert.equal(included(compilation),true);assert.deepEqual(JSON.parse(storage['playlist-bridge-secondary-types']),['Live','Compilation','Remix']);
+assert.equal(included(compilation),true);assert.deepEqual(JSON.parse(storage['harmonia-secondary-types']),['Live','Compilation','Remix']);
 
 const tick=()=>new Promise(resolve=>setImmediate(resolve));
 function mount(file,component,props,imports={}){

@@ -4,10 +4,10 @@ import unittest
 from pathlib import Path
 from unittest.mock import Mock, patch
 from fastapi import HTTPException
-from playlist_bridge.storage import Repository
-from playlist_bridge.lidarr_requests import server_id
-from playlist_bridge.lidarr_request_events import update
-from playlist_bridge import lidarr_downloads
+from harmonia.storage import Repository
+from harmonia.lidarr_requests import server_id
+from harmonia.lidarr_request_events import update
+from harmonia import lidarr_downloads
 
 
 class PollEventRaces(unittest.TestCase):
@@ -27,7 +27,7 @@ class PollEventRaces(unittest.TestCase):
                         raise HTTPException(502,'Lidarr returned HTTP 404: absent')
                     raise AssertionError(path)
                 client.call.side_effect=call
-                with patch('playlist_bridge.lidarr.Client',return_value=client),patch.object(lidarr_downloads,'queue',return_value=[]),patch('playlist_bridge.api._record_log'):
+                with patch('harmonia.lidarr.Client',return_value=client),patch.object(lidarr_downloads,'queue',return_value=[]),patch('harmonia.api._record_log'):
                     lidarr_downloads.snapshot(repo,cfg,force=True)
                 row=repo.load('lidarr_requests')['one']
                 self.assertEqual(row['download_status'],'Import failed')
@@ -50,7 +50,7 @@ class PollEventRaces(unittest.TestCase):
                     if path=='album':return []
                     raise HTTPException(502,'Lidarr returned HTTP 404: absent')
                 client.call.side_effect=call
-                with patch('playlist_bridge.lidarr.Client',return_value=client),patch.object(lidarr_downloads,'queue',return_value=[]),patch('playlist_bridge.api._record_log'):
+                with patch('harmonia.lidarr.Client',return_value=client),patch.object(lidarr_downloads,'queue',return_value=[]),patch('harmonia.api._record_log'):
                     lidarr_downloads.snapshot(repo,cfg,force=True)
                 row=repo.load('lidarr_requests')['one']
                 self.assertEqual(row['download_status'],'Import failed')

@@ -4,9 +4,9 @@ import unittest
 import wave
 from pathlib import Path
 from unittest.mock import patch
-from playlist_bridge import local_library as lib
-from playlist_bridge.storage import Repository
-from playlist_bridge.musicbrainz_settings import Preferences, ordered_releases
+from harmonia import local_library as lib
+from harmonia.storage import Repository
+from harmonia.musicbrainz_settings import Preferences, ordered_releases
 
 RID='11111111-1111-1111-1111-111111111111'
 GID='22222222-2222-2222-2222-222222222222'
@@ -57,7 +57,7 @@ class LocalLibrary(unittest.TestCase):
         lib.put('local_inventory',lib.scope(lib.settings()),{'checked_at':time.time(),'tracks':[row]})
         lib.put('local_releases',RID,release)
         plex={'checked_at':time.time(),'rows':[{'plex_id':'p','files':[file],'title':'Song','artist':'Artist','album':'Album'}]}
-        with patch('playlist_bridge.api._config',return_value=SimpleNamespace(repository=self.repo)),patch('playlist_bridge.inventory.current',return_value=(plex,{})):
+        with patch('harmonia.api._config',return_value=SimpleNamespace(repository=self.repo)),patch('harmonia.inventory.current',return_value=(plex,{})):
             self.assertEqual(lib.native_view()['rows'][0]['status'],'Partial')
             release['media'][0]['tracks'][0]['recording']['id']=REC
             lib.put('local_releases',RID,release)

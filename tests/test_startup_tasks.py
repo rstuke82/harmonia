@@ -3,9 +3,9 @@ import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
-from playlist_bridge import tasks, accounts, saved_views
-from playlist_bridge.storage import Repository
-from playlist_bridge.jobs import Store
+from harmonia import tasks, accounts, saved_views
+from harmonia.storage import Repository
+from harmonia.jobs import Store
 
 class StartupTests(unittest.TestCase):
     def setUp(self):
@@ -53,7 +53,7 @@ class StartupTests(unittest.TestCase):
         self.store.save_schedule(data,schedule['id'])
         self.store.save_schedule({k:v for k,v in data.items() if k!='startup'},schedule['id'])
         self.assertEqual(self.repo.load('task_startup')['plex_scan'],'always')
-        with patch('playlist_bridge.api._config') as cfg:
+        with patch('harmonia.api._config') as cfg:
             cfg.return_value.config={'playlists':[]}
             tasks.restore_defaults(self.store,'plex_scan')
         self.assertEqual(self.repo.load('task_startup')['plex_scan'],'missing')
@@ -61,17 +61,17 @@ class StartupTests(unittest.TestCase):
 
     def test_changed_service_identity_counts_as_missing_and_empty_scan_is_valid(self):
         from types import SimpleNamespace
-        from playlist_bridge.inventory import identity
+        from harmonia.inventory import identity
         cfg={'url':'http://plex','token':'secret','music_library_key':'1'}
         key=identity(SimpleNamespace(base_url=cfg['url'],music_library_key='1',headers={'X-Plex-Token':'secret','Accept':'application/json'}))
         with self.repo.connect() as db:db.execute("INSERT INTO state VALUES('inventory','plex',?)",(json.dumps({'identity':key,'checked_at':123,'rows':[]}),))
-        with patch.object(accounts,'root_repository',return_value=self.repo),patch('playlist_bridge.storage.read_json',return_value={'plex':cfg}):
+        with patch.object(accounts,'root_repository',return_value=self.repo),patch('harmonia.storage.read_json',return_value={'plex':cfg}):
             self.assertEqual(tasks.startup_check(self.store,'plex_scan'),(True,123))
-            with patch('playlist_bridge.inventory.identity',return_value='changed'):
+            with patch('harmonia.inventory.identity',return_value='changed'):
                 self.assertEqual(tasks.startup_check(self.store,'plex_scan'),(True,None))
 
     def test_warm_saved_page_stays_available_and_force_reuses_active_job(self):
-        name='library directory v16'
+        name='library directory v17'
         old=saved_views._readers.get(name);provider=saved_views._providers.get(name)
         self.addCleanup(lambda: saved_views._readers.pop(name,None) if old is None else saved_views._readers.__setitem__(name,old))
         self.addCleanup(lambda: saved_views._providers.pop(name,None) if provider is None else saved_views._providers.__setitem__(name,provider))

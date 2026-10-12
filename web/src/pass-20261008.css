@@ -66,7 +66,7 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-off
  .jobs-table td{padding:6px 16px;border:0}
  .jobs-table tr{padding:16px 0;border-bottom:1px solid var(--border)}
  .jobs-table td:first-child{width:100%}
- .jobs-table td:nth-child(3):before{content:'Last run: ';color:var(--muted)}
+ .jobs-table td:nth-child(3):before{content:'Last completed: ';color:var(--muted)}
  .jobs-table td:nth-child(4):before{content:'Next run: ';color:var(--muted)}
  .jobs-table td>.actions{justify-content:flex-start;margin-top:8px}
  .discover-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}

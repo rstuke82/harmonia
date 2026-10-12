@@ -1,8 +1,8 @@
 import unittest
 from unittest.mock import patch
 from fastapi import HTTPException
-from playlist_bridge import api
-from playlist_bridge.diagnostics import concise_error
+from harmonia import api
+from harmonia.diagnostics import concise_error
 
 class Beta8Tests(unittest.TestCase):
     def test_batch_rejects_unscoped_and_empty_requests(self):
