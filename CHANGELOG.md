@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.0.107 · Beta — 2026-10-16
+
+- Clear automatically followed terminal activity after 30 seconds; keep deliberately opened job-history details available.
+- Show the finish date/time on completed activity headers and stop pinning collapsed historical panels.
+- Acknowledge terminal jobs when dismissed, including collapsed details.
+
 ## 1.0.0.106 · Beta — 2026-10-16
 
 - Reduce matching CPU during health checks and automatic retries with cached text preparation and a conservative native title prefilter; retain full fuzzy fallback and recording safeguards.

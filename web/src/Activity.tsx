@@ -110,6 +110,16 @@ export default function Activity({jobs,jobId=''}:{jobs:Job[];jobId?:string}){
  },[id,open])
  useEffect(()=>{if(!open&&listed)setDetail(listed)},[listed,open])
  useEffect(()=>{if(!job||!activeJob(job))return;const timer=setInterval(()=>setClock(Date.now()),1000);return()=>clearInterval(timer)},[job?.id,job?.status])
+ // Automatically followed activity is transient. Explicit history links keep
+ // their details available until dismissed, including old interrupted jobs.
+ useEffect(()=>{
+   if(jobId||!job||activeJob(job)||!job.finished_at)return
+   const finished=Date.parse(job.finished_at)
+   if(!Number.isFinite(finished))return
+   const remaining=Math.max(0,30000-(Date.now()-finished))
+   const timer=setTimeout(()=>{setId('');setDetail(null)},remaining)
+   return()=>clearTimeout(timer)
+ },[jobId,job?.id,job?.status,job?.finished_at])
  useEffect(()=>{if(open&&!error&&detail?.id===id&&!activeJob(detail)&&jobNeedsAttention(detail))markJobReviewed(detail)},[id,open,error,detail?.id,detail?.status,detail?.finished_at,detail?.result?.partial_success])
  if(!id)return <section className="panel idle-activity"><Icon name="activity"/><h2>No active jobs</h2><p className="muted">Recent jobs and their saved output are below.</p></section>
  if(!job)return <section className="panel"><p>{error||'Opening activity…'}</p><button onClick={()=>{location.hash='activity';setId('')}}>Dismiss</button></section>
@@ -119,7 +129,7 @@ export default function Activity({jobs,jobId=''}:{jobs:Job[];jobId?:string}){
  const target=current[0]?.name||payload.url||payload.title||({all:'All playlists',favorites:'Favorites',automatic:'Auto Sync playlists'}[payload.scope as string])||payload.playlist_keys?.join(', ')||'Playlist operation'
  const stage=active&&current[0]?.mode==='waiting'?`Waiting for ${current[0].service}`:displayText(job.progress)
  async function cancel(){try{await api.cancel(id);window.dispatchEvent(new Event('jobs-refresh'))}catch(e:any){setError(e.message)}}
- return <section className={`activity-panel ${open?'is-open':'is-collapsed'}`} ref={panel} aria-label="Current activity"><div className="activity-bar"><button className="activity-toggle" aria-expanded={open} onClick={()=>setOpen(v=>!v)}><span className={`activity-light ${job.status}`} aria-hidden="true"/><span><strong>{actionName(job.action)} · {active?target:jobResultLabel(job)}</strong><small>{stage} · {elapsed(job.started_at,active?clock:Date.parse(job.finished_at||job.started_at||''))}</small></span><span aria-hidden="true">{open?'⌃':'⌄'}</span></button>{!active&&<button className="small-button" onClick={()=>{location.hash='activity';setId('');setDetail(null)}}>Dismiss</button>}</div>
+ return <section className={`activity-panel ${open?'is-open':'is-collapsed'}${active?'':' is-terminal'}`} ref={panel} aria-label="Current activity"><div className="activity-bar"><button className="activity-toggle" aria-expanded={open} onClick={()=>setOpen(v=>!v)}><span className={`activity-light ${job.status}`} aria-hidden="true"/><span><strong>{actionName(job.action)} · {active?target:jobResultLabel(job)}</strong><small>{active?stage:`Finished ${stamp(job.finished_at)}`} · {elapsed(job.started_at,active?clock:Date.parse(job.finished_at||job.started_at||''))}</small></span><span aria-hidden="true">{open?'⌃':'⌄'}</span></button>{!active&&<button className="small-button" onClick={()=>{markJobReviewed(job);location.hash='activity';setId('');setDetail(null)}}>Dismiss</button>}</div>
  {open&&<div className="activity-body"><div className="panel-head"><h2>{(job as any).owner_name&&`${(job as any).owner_name} · `}{actionName(job.action)} <small className="muted">{jobResultLabel(job)}</small></h2>{active&&<button disabled={job.status==='cancelling'} onClick={cancel}>{job.status==='cancelling'?'Stopping…':'Stop job'}</button>}</div>
 <small className="muted">{job.worker&&`${job.worker} worker · `}{payload.trigger_label&&`${payload.trigger_label} · `}Started {stamp(job.started_at)}{job.finished_at&&` · Finished ${stamp(job.finished_at)}`}</small>
  {active&&current.map(l=><div className="activity-stage" key={l.key}><strong>{l.name}{l.playlist_index&&l.playlist_total?` · playlist ${l.playlist_index} of ${l.playlist_total}`:''}</strong><p role="status">{l.mode==='waiting'?`Waiting for ${l.service} · ${elapsed(l.since,clock)}`:displayText(l.stage)}</p>{l.mode==='waiting'&&<small className="muted">{displayText(l.stage)} · request pending</small>}{l.total>0&&l.completed!=null&&<progress max={l.total} value={l.completed}/>}</div>)}
