@@ -112,6 +112,7 @@ def saved(name,deps=COMMON,enabled=None):
             job_id=enqueue(repo,row,stamp,force,priority=priority) if stale or force else row['job_id']
             headers={'X-Saved-View':key,'X-Saved-View-Updated':str(row['updated_at'] or 0),'X-Saved-View-Stale':str(bool(stale or force)).lower(),'Server-Timing':f'saved-db;dur={(time.monotonic()-started)*1000:.1f}'}
             if job_id and (stale or force):headers['X-Saved-View-Job']=str(job_id)
+            if row['error'] and row['attempt_revision']==stamp and not force:headers['X-Saved-View-Error']='true'
             if row['data'] is None:
                 if row['error'] and row['attempt_revision']==stamp and not force:
                     return JSONResponse({'detail':'Could not prepare this saved view. Refresh to retry; see Activity for details.'},status_code=503,headers=headers)

@@ -285,8 +285,10 @@ async def log_operations(request, call_next):
         detail = getattr(request.state, 'failure_detail', '')
         if response.status_code==404 and detail=='Plex image unavailable' and path.startswith('/api/library/'):
             level='DEBUG'
-        await run_in_threadpool(_record_log, level, path,
-            f"[{request_id}] {request.method} HTTP {response.status_code} in {time.monotonic()-started:.2f}s" + (f" — {detail}" if detail else ''))
+        from . import console_logging
+        if level!='DEBUG' or console_logging.enabled:
+            await run_in_threadpool(_record_log, level, path,
+                f"[{request_id}] {request.method} HTTP {response.status_code} in {time.monotonic()-started:.2f}s" + (f" — {detail}" if detail else ''))
     _request_log_id.reset(log_token)
     response.headers['X-Request-ID'] = request_id
     if request.url.path.startswith('/assets/') and response.status_code == 200:
@@ -1249,11 +1251,10 @@ def queue_job(request: JobRequest):
 
 
 @app.get('/api/jobs')
-def list_jobs():
+def list_jobs(background: bool = False):
     from .accounts import actor
     from .admin_activity import listing
-    rows=listing() if actor() and actor().get('admin') else job_store().list()
-    return [row for row in rows if row.get('action') not in ('prepare_views','request_status')]
+    return listing(summary=True,background=background) if actor() and actor().get('admin') else job_store().summaries(background)
 
 
 @app.post('/api/jobs/cancel-pending')
@@ -1312,7 +1313,7 @@ def live_job(job_id: str, after: int = Query(default=0, ge=0)):
     if not job:
         raise HTTPException(404, 'Job not found')
     from .admin_activity import job as described
-    return {'job': described(job_id), 'events': store.events(job_id, after)}
+    return {'job': described(job_id,row=job,store=store), 'events': store.events(job_id, after)}
 
 
 @app.get('/api/jobs/{job_id}/log')

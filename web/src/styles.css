@@ -43,12 +43,9 @@ main{min-width:0}.notice{display:flex;justify-content:space-between;align-items:
   .missing-list .missing-user-filter { flex-wrap: wrap; }
 }
 
-/* Visible read progress stays above page content and never blocks controls. */
-.page-read-status{display:flex;align-items:center;gap:.75rem;margin:0 0 1rem;padding:.75rem 1rem;border:1px solid var(--border,#323b4b);border-radius:16px;background:var(--surface-solid,#18212f);color:var(--text,#eaf0f8);font-size:.9rem}
-.page-read-status>div{display:grid;gap:.2rem;min-width:0;flex:1}
-.page-read-status strong{font-size:inherit}
-.page-read-status span{overflow-wrap:anywhere}
-.page-read-spinner{width:1.1rem;height:1.1rem;flex:none;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:page-read-spin .9s linear infinite;color:var(--accent,#2878dc)}
-@keyframes page-read-spin{to{transform:rotate(360deg)}}
-@media(prefers-reduced-motion:reduce){.page-read-spinner{animation:none;border-style:dotted}}
-@media(max-width:520px){.page-read-status{flex-wrap:wrap;padding:.7rem}.page-read-error>div{flex-basis:100%}}
+.background-updates>summary{display:flex;align-items:center;justify-content:space-between;gap:1rem;cursor:pointer;min-height:44px}
+.background-updates>summary::before{content:'▸';flex:none}
+.background-updates[open]>summary::before{content:'▾'}
+.background-update-row{display:grid;gap:.35rem;padding:.8rem 0;border-top:1px solid var(--border,#323b4b);overflow-wrap:anywhere}
+.background-updates>summary .muted{margin-left:auto;font-size:.85rem}
+@media(max-width:520px){.background-updates>summary{flex-wrap:wrap;gap:.4rem}}

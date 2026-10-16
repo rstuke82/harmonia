@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.0.0.102 · Beta — 2026-10-16
+
+- Move page-read and refresh feedback into an expandable Background updates section in Activity; remove page-shifting banners and routine settings indicators.
+- Poll compact job results and history without decoding full health/source previews; retain full job details and immediate per-playlist completion signals.
+- Keep authentication database reads off the event loop, skip disabled debug polling logs, and read cancellation flags without loading full results.
+- Reuse account-scoped saved matching links, invalidating them when inventory, path mappings or manual links change.
+- Find the same strong song identities before fully scoring unrelated titles; preserve fuzzy fallback, recording/version guards and duration checks.
+- Make automatic suggestions usable while alternate candidates continue loading.
+
 ## 1.0.0.101 · Beta — 2026-10-16
 
 - Keep the full Library model cached across unrelated playlist and account updates, while preserving account, permission, credential, artwork and inventory invalidation.

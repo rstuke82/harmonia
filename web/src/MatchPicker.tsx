@@ -38,7 +38,7 @@ export default function MatchPicker({track,playlistKey,userId,onClose,onSave}:{
       const result=await api.automatic(track,userId)
       if(id!==generation.current)return
       setAutomatic(result.candidate)
-      if(result.candidate){setChoice(result.candidate);setProvenance('automatic');const rows=await api.candidates({...track,query:''},userId);if(id===generation.current)setCandidates([result.candidate,...rows.filter(c=>c.plex_id!==result.candidate.plex_id)])}else{await search('')}
+      if(result.candidate){setChoice(result.candidate);setProvenance('automatic');setCandidates([result.candidate]);setLoading(false);const rows=await api.candidates({...track,query:''},userId);if(id===generation.current)setCandidates([result.candidate,...rows.filter(c=>c.plex_id!==result.candidate.plex_id)])}else{await search('')}
     }catch(e:any){if(id===generation.current){setError(e.message)}}
     finally{if(id===generation.current)setLoading(false)}
   }
@@ -68,7 +68,7 @@ export default function MatchPicker({track,playlistKey,userId,onClose,onSave}:{
         <form className="matching-search" onSubmit={e=>{e.preventDefault();search(query)}}><input aria-label="Search Harmonia Library" placeholder="Search Harmonia Library title, artist or album" value={query} disabled={saving} onChange={e=>setQuery(e.target.value)}/><button disabled={saving||loading}>Search</button></form>
         {error&&<ErrorNotice error={error}/>}
         {loading?<p role="status"><span className="spinner"/> Searching Harmonia Library…</p>:<>
-          {!candidates.length&&!automatic&&<p>No candidates found. Try another search.</p>}
+          {!error&&!candidates.length&&!automatic&&<p>No candidates found. Try another search.</p>}
           {candidates.map(c=><div key={c.plex_id}><button type="button" className={`candidate ${choice?.plex_id===c.plex_id?'chosen':''}`} aria-pressed={choice?.plex_id===c.plex_id} disabled={saving} key={c.plex_id} onClick={()=>{setChoice(c);setProvenance(c.plex_id===automatic?.plex_id?'automatic':'manual')}}><span><strong>{c.title}</strong><small>{c.track_artist||c.artist} · {c.album||'N/A'}</small><small>{[c.edition,c.disc_number?`Disc ${c.disc_number}`:'',c.track_number?`Track ${c.track_number}`:''].filter(Boolean).join(' · ')}</small><small>Duration: {formatDuration(c.duration)}{c.duration_delta!=null?` · ${c.duration_delta.toFixed(1)}s difference from original`:''}</small>{c.other_entries?.length&&<small>{1+c.other_entries.length} Plex entries for this recording</small>}{c.artist_credit_reason&&<small>{c.artist_credit_reason}</small>}</span><b>{c.score}%{c.plex_id===automatic?.plex_id&&<small>Suggested</small>}</b></button>{!!c.other_entries?.length&&<details><summary>Other Plex entries ({c.other_entries.length})</summary>{c.other_entries.map((other,index)=><button className={`candidate ${choice?.plex_id===other.plex_id?'chosen':''}`} key={other.plex_id} disabled={saving} onClick={()=>{setChoice(other);setProvenance('manual')}}><span><strong>{other.title}</strong><small>{other.track_artist||other.artist} · {other.album} · {formatDuration(other.duration)}</small><small>Alternate entry {index+1}</small></span><b>{other.score}%</b></button>)}</details>}</div>)}
         </>}
       </div>

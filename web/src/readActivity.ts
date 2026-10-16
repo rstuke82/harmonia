@@ -19,7 +19,6 @@ function name(path:string){
  if(p==='/api/missing')return 'missing tracks'
  if(p==='/api/lidarr/requests'||p.startsWith('/api/requests-user/'))return 'requests'
  if(p==='/api/search')return 'search results'
- if(p.startsWith('/api/settings/'))return 'settings'
  if(p.startsWith('/api/account/matches'))return 'manual matches'
  return ''
 }

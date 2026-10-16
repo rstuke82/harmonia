@@ -1161,18 +1161,33 @@ class Matcher:
         if not plex_library:
             return None
 
-        scored = []
-
-        for plex_track in plex_library:
-            if cls._recording_version_mismatch(source_track,plex_track):
+        # The existing decision always isolates title>=95 / artist>=85
+        # identities before ranking. Find that same complete pool first and
+        # avoid expensive album/credit scoring for unrelated titles.
+        strong = []
+        pre_scored = {}
+        for index, plex_track in enumerate(plex_library):
+            title_score, _ = cls._title_score(
+                str(source_track.get('title', '')), str(plex_track.get('title', ''))
+            )
+            if title_score < 95 or cls._recording_version_mismatch(source_track, plex_track):
                 continue
-            details = cls.score_candidate(
-                source_track,
-                plex_track,
-            )
-            scored.append(
-                (details, plex_track)
-            )
+            details = cls.score_candidate(source_track, plex_track)
+            pre_scored[index] = details
+            if details['title_score'] >= 95 and details['artist_score'] >= 85:
+                strong.append((details, plex_track))
+        if strong:
+            scored = strong
+        else:
+            # Preserve the full fuzzy fallback and its original tie order.
+            scored = []
+            for index, plex_track in enumerate(plex_library):
+                details = pre_scored.get(index)
+                if details is None:
+                    if cls._recording_version_mismatch(source_track, plex_track):
+                        continue
+                    details = cls.score_candidate(source_track, plex_track)
+                scored.append((details, plex_track))
 
         if not scored:
             return None

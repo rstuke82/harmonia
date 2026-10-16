@@ -5,3 +5,5 @@
 - [x] **M3/M4 — Network consistency and timeouts.** Route application HTTP calls through the shared transport, enforce finite connection/read bounds, and preserve authenticated redirect, artwork, and playlist-write protections. Implemented in build 98.
 
 - [x] **Page performance and visible loading.** Reduce repeated Library rebuilding and history lookup work; show nonblocking loading, background refresh, preparation progress and retry feedback. Implemented in build 101.
+
+- [x] **Activity-only refresh feedback and responsive reads.** Remove page-shifting banners, compact job polling/history, reuse saved matching links and avoid unrelated scoring on strong identity matches. Implemented in build 102.

@@ -129,12 +129,12 @@ function watchSaved(path:string,updated:string){
   try{
    const response=await fetch(path,{headers:trackedHeaders,signal:controller.signal})
    if(readEpoch()!==epoch){stop();return}
-   if(!response.ok)throw Error('Refresh unavailable')
+   if(!response.ok||response.headers.get('X-Saved-View-Error')==='true')throw Error('Refresh unavailable')
    if(response.headers.get('X-Saved-View-Updated')!==updated&&!response.headers.get('X-Saved-View-Pending')){
     stop();window.dispatchEvent(new CustomEvent('saved-view-updated',{detail:{path}}));return
    }
    if(response.headers.get('X-Saved-View-Stale')!=='true'){stop();return}
-   if(await readPhase(response,finish,controller.signal))throw Error('Page preparation stopped')
+   if((location.hash||'').startsWith('#activity')&&await readPhase(response,finish,controller.signal))throw Error('Page preparation stopped')
    if(readEpoch()!==epoch){stop();return}
    watch.timer=setTimeout(poll,3000)
   }catch{
@@ -158,7 +158,7 @@ async function send<T>(path:string, init?:RequestInit):Promise<T> {
     while(response.headers.get('X-Saved-View-Pending')==='true'){
       preparing=true
       if(!lastPhase)finish.update('Preparing page data…')
-      if(Date.now()-lastPhase>=3000){if(await readPhase(response,finish,controller.signal))throw new Error('Page preparation stopped. Refresh this page to retry or open Jobs for details.');lastPhase=Date.now()}
+      if((location.hash||'').startsWith('#activity')&&Date.now()-lastPhase>=3000){if(await readPhase(response,finish,controller.signal))throw new Error('Page preparation stopped. Refresh this page to retry or open Jobs for details.');lastPhase=Date.now()}
       await new Promise(resolve=>setTimeout(resolve,1000))
       if(controller.signal.aborted)throw new DOMException('Saved view is still preparing','AbortError')
       response=await fetch(pollPath,{...init,signal:controller.signal,headers:{...trackedHeaders,...init?.headers}})
@@ -225,6 +225,7 @@ export const api = {
   recreatePlaylist: (key:string) => request<Job>(`/api/playlists/${encodeURIComponent(key)}/recreate`,{method:'POST',body:JSON.stringify({confirmed:true})}),
   automatic: (track:any,userId?:string) => request<any>('/api/missing/automatic'+(userId?'?user_id='+encodeURIComponent(userId):''),{method:'POST',body:JSON.stringify(track)}),
   jobs: () => request<Job[]>('/api/jobs'),
+  backgroundJobs: () => request<Job[]>('/api/jobs?background=true'),
   enqueue: async(action:string,payload:any={}) => {
     const bytes=crypto.getRandomValues(new Uint8Array(16));bytes[6]=(bytes[6]&15)|64;bytes[8]=(bytes[8]&63)|128
     const hex=Array.from(bytes,b=>b.toString(16).padStart(2,'0')).join('')

@@ -47,15 +47,17 @@ def register(app):
             from .admin_activity import history as all_history
             return all_history(offset,limit,owner,worker,sections=sections)
         from .jobs import history_where
+        from .job_summaries import projection
+        columns=projection()
         where,params=history_where(worker)
         store=job_store()
         active=[]
         if sections:
-            active=store._rows("SELECT * FROM jobs"+where+" AND status IN ('running','cancelling','queued') ORDER BY created_at ASC,id ASC",params)
+            active=store._rows("SELECT "+columns+" FROM jobs"+where+" AND status IN ('running','cancelling','queued') ORDER BY created_at ASC,id ASC",params)
             where+=" AND status NOT IN ('running','cancelling','queued')"
         with store.repository.connect() as db:total=db.execute('SELECT COUNT(*) FROM jobs'+where,params).fetchone()[0]
         order="COALESCE(finished_at,started_at,created_at) DESC,created_at DESC,id ASC" if sections else "created_at DESC"
-        result={'rows':store._rows('SELECT * FROM jobs'+where+' ORDER BY '+order+' LIMIT ? OFFSET ?',(*params,limit,offset)),'total':total}
+        result={'rows':store._rows('SELECT '+columns+' FROM jobs'+where+' ORDER BY '+order+' LIMIT ? OFFSET ?',(*params,limit,offset)),'total':total}
         if sections:result['active']=active
         return result
 

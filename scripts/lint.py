@@ -9,6 +9,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 BASELINE = ROOT / "lint-baseline.json"
 FORMAT_PATHS = [
+    "harmonia/job_summaries.py",
+    "tests/test_responsive_activity.py",
     "tests/test_page_preparation.py",
     "scripts/verify_page_loading.py",
     "harmonia/webhook_transport.py",

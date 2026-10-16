@@ -50,11 +50,12 @@ def links(tracks,plex,manual=None):
 def context(config,plex,album_id=None,inventory=None):
     from .accounts import root_repository
     from .lidarr import config as settings
-    from .inventory import current
     from .lidarr_requests import server_id
     cfg=settings(root_repository())
     if not cfg.get('enabled'):return None
-    if inventory is None:_,inventory=current(config.repository,config)
+    if inventory is None:
+        from .library_inventory import matching_context
+        return matching_context(config,plex)
     tracks=inventory.get('tracks',[])
     if album_id is not None:tracks=[t for t in tracks if str(t.get('album_id'))==str(album_id)]
     # Old scans are intentionally not interpreted as an empty library.

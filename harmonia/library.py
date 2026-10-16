@@ -128,7 +128,7 @@ def read():
         lidarr={}
         ctx={'tracks':[],'links':{},'pending':False}
     else:
-        ctx=context(config,plex.get('rows',[]),inventory=lidarr) or {'tracks':[],'links':{},'pending':True}
+        ctx=context(config,plex.get('rows',[])) or {'tracks':[],'links':{},'pending':True}
     return config,plex,lidarr,ctx
 
 def can_issues():

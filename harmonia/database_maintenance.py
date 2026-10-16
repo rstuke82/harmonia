@@ -82,7 +82,10 @@ def execute(action,payload=None):
             db.execute('BEGIN IMMEDIATE')
             old=[r[0] for r in db.execute("SELECT id FROM jobs WHERE status IN ('completed','failed','cancelled','interrupted') AND created_at<?",(job_cut,))]
             if old:db.execute('DELETE FROM job_events WHERE job_id IN ('+','.join('?' for _ in old)+')',old)
-            if old:db.execute('DELETE FROM jobs WHERE id IN ('+','.join('?' for _ in old)+')',old)
+            if old:
+                placeholders=','.join('?' for _ in old)
+                db.execute("DELETE FROM state WHERE namespace='job_result_summaries' AND key IN ("+placeholders+')',old)
+                db.execute('DELETE FROM jobs WHERE id IN ('+placeholders+')',old)
             diagnostics=db.execute('DELETE FROM diagnostic_events WHERE created_at<?',(log_cut,)).rowcount
             logs=db.execute('DELETE FROM application_logs WHERE created_at<?',(log_cut,)).rowcount
             now=time.time();sessions=db.execute("DELETE FROM state WHERE namespace IN ('sessions','login_pins') AND COALESCE(json_extract(value,'$.expires'),0)<?",(now,)).rowcount

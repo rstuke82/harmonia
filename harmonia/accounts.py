@@ -293,11 +293,15 @@ def install(app):
         path = request.url.path
         if not path.startswith('/api/') or path in ('/api/auth/me', '/api/auth/start', '/api/auth/poll'):
             return await call_next(request)
-        try:token_user=api_user(request)
+        def lookup():
+            token_user=api_user(request)
+            secret=request.cookies.get(COOKIE,'')
+            session=root_repository().load_one('sessions',hashlib.sha256(secret.encode()).hexdigest(),{}) if secret and not token_user else {}
+            user=token_user or root_repository().load_one('accounts',str(session.get('user_id','')))
+            return token_user,session,user
+        from starlette.concurrency import run_in_threadpool
+        try:token_user,session,user=await run_in_threadpool(lookup)
         except HTTPException as exc:return JSONResponse({'detail':exc.detail},status_code=exc.status_code)
-        secret = request.cookies.get(COOKIE, '')
-        session = root_repository().load_one('sessions',hashlib.sha256(secret.encode()).hexdigest(), {}) if secret and not token_user else {}
-        user = token_user or root_repository().load_one('accounts',str(session.get('user_id', '')))
         if not user or user.get('disabled') or session.get('expires', 0) < time.time():
             if token_user:user=token_user
             else:
@@ -309,7 +313,6 @@ def install(app):
                 return JSONResponse({'detail': 'Your session changed. Refresh and try again.'}, status_code=403)
         request.state.auth_method = 'api_key' if token_user else 'session'
         try:
-            from starlette.concurrency import run_in_threadpool
             await run_in_threadpool(refresh_access,user,bool(token_user))
         except HTTPException as exc:
             return JSONResponse({'detail':exc.detail},status_code=exc.status_code)

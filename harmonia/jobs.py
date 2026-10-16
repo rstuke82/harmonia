@@ -128,6 +128,21 @@ class Store:
         rows = self._rows("SELECT jobs.*, state.value AS activity FROM jobs LEFT JOIN state ON state.namespace='job_activity' AND state.key=jobs.id WHERE jobs.id=?", (job_id,))
         return rows[0] if rows else None
 
+    def contains(self, job_id):
+        with self.repository.connect() as db:
+            return db.execute('SELECT 1 FROM jobs WHERE id=?',(job_id,)).fetchone() is not None
+
+    def cancel_requested(self, job_id):
+        with self.repository.connect() as db:
+            row=db.execute('SELECT cancel_requested FROM jobs WHERE id=?',(job_id,)).fetchone()
+        return row is None or bool(row[0])
+
+    def summaries(self, background=False):
+        from .job_summaries import projection
+        where="action='prepare_views'" if background else "action NOT IN ('prepare_views','request_status')"
+        return self._rows('SELECT '+projection()+" FROM jobs WHERE "+where+
+            " ORDER BY CASE WHEN status IN ('queued','running','cancelling') THEN 0 ELSE 1 END,created_at DESC LIMIT 200")
+
     def list(self):
         return self._rows("SELECT jobs.*, state.value AS activity FROM jobs LEFT JOIN state ON state.namespace='job_activity' AND state.key=jobs.id ORDER BY CASE WHEN status IN ('queued','running','cancelling') THEN 0 ELSE 1 END, created_at DESC LIMIT 200")
 
@@ -169,15 +184,20 @@ class Store:
         allowed = {'status','progress','result','error','started_at','finished_at','cancel_requested'}
         if not values or not values.keys() <= allowed:
             raise ValueError('Invalid job update')
-        if 'result' in values:
-            values['result'] = json.dumps(values['result'], default=str)
+        result=values.get('result')
+        has_result='result' in values
+        if has_result:
+            values['result'] = json.dumps(result, default=str)
         if 'progress' in values:
             self.event(job_id, values['progress'], 'stage')
         with self.repository.connect() as db:
             condition=" WHERE id=?"
             if values.get('status')!='cancelled':
                 condition+=" AND NOT (action='musicbrainz_lookup' AND cancel_requested=1)"
-            db.execute('UPDATE jobs SET '+','.join(k+'=?' for k in values)+condition, (*values.values(),job_id))
+            changed=db.execute('UPDATE jobs SET '+','.join(k+'=?' for k in values)+condition, (*values.values(),job_id)).rowcount
+            if changed and has_result:
+                from .job_summaries import save
+                save(db,job_id,result)
 
 
     def event(self, job_id, message, stage='output'):
@@ -338,7 +358,7 @@ class Context:
         self.redaction_config = Config(read_only=True, namespaces=[])
 
     def checkpoint(self):
-        if self.stop.is_set() or self.store.get(self.id)['cancel_requested']:
+        if self.stop.is_set() or self.store.cancel_requested(self.id):
             raise Cancelled()
 
 
@@ -562,7 +582,7 @@ def waiting(service):
         yield
         return
     key = (getattr(_local, 'target', None) or {}).get('key', 'job')
-    state = ctx.store.get(ctx.id).get('activity') or {}
+    state = ctx.store.repository.load_one('job_activity',ctx.id,{})
     previous = state.get('lanes', {}).get(key, {}).copy()
     activity(mode='waiting', service=service, since=now())
     try:
