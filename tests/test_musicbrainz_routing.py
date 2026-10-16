@@ -121,3 +121,85 @@ class MusicBrainzRoutingTests(unittest.TestCase):
             Preferences(server_url="https://mirror.example/").server_url, "https://mirror.example"
         )
         self.assertEqual(Preferences(server_url="").server_url, "")
+
+
+class PublicFallbackDiagnostics(unittest.TestCase):
+    def call(self, replies):
+        repo = Repo()
+        with (
+            patch(
+                "harmonia.musicbrainz_settings.settings",
+                return_value={
+                    "enabled": True,
+                    "server_url": "https://mirror.example",
+                    "capabilities": ["search_release-group"],
+                },
+            ),
+            patch.object(client.network, "get", side_effect=replies) as get,
+            patch.object(client.time, "sleep"),
+        ):
+            result = client.get(repo, "release-group", {"query": "releasegroup:Vex"})
+        return result, repo, get
+
+    def test_empty_mirror_and_busy_public_retry_do_not_blame_mirror(self):
+        result, repo, get = self.call(
+            [
+                response(data={"release-groups": []}),
+                response(503),
+                response(data={"release-groups": [{"id": "album"}]}),
+            ]
+        )
+        self.assertEqual(get.call_count, 3)
+        self.assertEqual(result["_harmonia_route"]["reason"], "mirror_empty")
+        messages = "\n".join(row[2] for row in repo.logs)
+        self.assertIn("public fallback returned HTTP 503", messages)
+        self.assertNotIn("mirror failed", messages)
+        self.assertEqual(
+            [c.args[0].split("/ws/")[0] for c in get.call_args_list],
+            ["https://mirror.example", client.PUBLIC_BASE, client.PUBLIC_BASE],
+        )
+
+    def test_public_retry_exhaustion_propagates_without_another_mirror_attempt(self):
+        repo = Repo()
+        with (
+            patch(
+                "harmonia.musicbrainz_settings.settings",
+                return_value={
+                    "enabled": True,
+                    "server_url": "https://mirror.example",
+                    "capabilities": ["search_release-group"],
+                },
+            ),
+            patch.object(
+                client.network,
+                "get",
+                side_effect=[response(data={"release-groups": []}), response(503), response(503)],
+            ) as get,
+            patch.object(client.time, "sleep"),
+        ):
+            with self.assertRaises(requests.HTTPError):
+                client.get(repo, "release-group", {"query": "releasegroup:Vex"})
+        self.assertEqual(get.call_count, 3)
+        self.assertFalse(any("mirror failed" in row[2] for row in repo.logs))
+
+    def test_public_client_error_is_not_retried(self):
+        repo = Repo()
+        with (
+            patch(
+                "harmonia.musicbrainz_settings.settings",
+                return_value={
+                    "enabled": True,
+                    "server_url": "https://mirror.example",
+                    "capabilities": ["search_release-group"],
+                },
+            ),
+            patch.object(
+                client.network,
+                "get",
+                side_effect=[response(data={"release-groups": []}), response(429)],
+            ) as get,
+            patch.object(client.time, "sleep"),
+        ):
+            with self.assertRaises(requests.HTTPError):
+                client.get(repo, "release-group", {"query": "releasegroup:Vex"})
+        self.assertEqual(get.call_count, 2)

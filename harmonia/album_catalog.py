@@ -66,7 +66,7 @@ def secondary_types(source):
     return list(dict.fromkeys(result))
 
 
-def catalog_rows(lidarr_rows, artists, catalogs, enrichment):
+def catalog_rows(lidarr_rows, artists, catalogs, enrichment, *, include_catalog=True):
     """Merge the Lidarr collection with cached MusicBrainz artist catalogs.
 
     Lidarr remains the authority for monitored/downloaded state. MusicBrainz only
@@ -122,6 +122,8 @@ def catalog_rows(lidarr_rows, artists, catalogs, enrichment):
         result.append(row)
         if group_id:
             seen.add(group_id)
+    if not include_catalog:
+        return result
     for artist in artists:
         artist_mbid = mbid(artist.get("mbid"))
         if not artist_mbid:

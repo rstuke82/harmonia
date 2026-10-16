@@ -730,10 +730,10 @@ def availability(rows, apply_preferences=True, deduplicate=True):
         return []
     from .matching import Matcher
     from .config import Config
-    from .library import cached_library, link_targets
+    from .library import cached_link_library, link_targets
 
     Config(read_only=True, namespaces=[])
-    model = cached_library()
+    model = cached_link_library()
     targets = link_targets(model)
     # All matching catalogs come from the unified Library. Underlying snapshot
     # metadata supplies scan freshness and queue status only.

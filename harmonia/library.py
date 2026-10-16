@@ -14,6 +14,8 @@ from .album_apple_artwork import artwork as apple_album_artwork
 
 
 _view_cache = OrderedDict()
+_link_cache = OrderedDict()
+_link_loading = weakref.WeakValueDictionary()
 _view_loading = weakref.WeakValueDictionary()
 _view_epoch = 0
 _view_lock = threading.Lock()
@@ -43,6 +45,15 @@ _VIEW_NAMESPACES = {
 }
 
 
+# Linking follows album identity/artwork/track changes, not Issues or biographies.
+_LINK_NAMESPACES = _VIEW_NAMESPACES - {
+    "file_audit",
+    "file_issue_reviews",
+    "library_artist_metadata",
+    "library_lastfm_artist_metadata",
+}
+
+
 def _revision(repo):
     from .saved_views import revision
 
@@ -54,6 +65,7 @@ def invalidate():
     global _view_epoch
     with _view_lock:
         _view_cache.clear()
+        _link_cache.clear()
         _view_epoch += 1
     from .library_inventory import clear
 
@@ -278,7 +290,7 @@ def public_library(value):
     return value
 
 
-def build_library():
+def _build_library(*, linking=False):
     from .accounts import actor
 
     started = time.monotonic()
@@ -339,7 +351,9 @@ def build_library():
 
     sources = [
         row
-        for row in catalog_rows(linked_rows, linked_artists, catalogs, extras)
+        for row in catalog_rows(
+            linked_rows, linked_artists, catalogs, extras, include_catalog=not linking
+        )
         if not is_blocked(row)
     ]
     prefs = metadata_preferences(root_repository())
@@ -486,27 +500,35 @@ def build_library():
 
     audit_snapshot = (
         root_repository().load_one("file_audit", scope(cfg, lidarr), {})
-        if cfg.get("audit_enabled")
+        if not linking and cfg.get("audit_enabled")
         else {}
     )
-    audit = report(cfg, lidarr, root_repository(), snapshot=audit_snapshot)
+    audit = (
+        {"issues": []}
+        if linking
+        else report(cfg, lidarr, root_repository(), snapshot=audit_snapshot)
+    )
     album_links = root_repository().load_one("plex_album_links", ctx.get("scope", ""), {})
     from .album_identity import Albums
 
     identities = Albums(lidarr, plex, cfg["mappings"], album_links, ctx["links"])
     from .edition_preferences import findings as edition_findings
 
-    errors = decorate(
-        [
-            identities.finding(e)
-            for e in issues(ctx, plex, identities)
-            + audit.pop("issues")
-            + edition_findings(lidarr, root_repository())
-        ],
-        root_repository(),
+    errors = (
+        []
+        if linking
+        else decorate(
+            [
+                identities.finding(e)
+                for e in issues(ctx, plex, identities)
+                + audit.pop("issues")
+                + edition_findings(lidarr, root_repository())
+            ],
+            root_repository(),
+        )
     )
-    metadata = root_repository().load("library_artist_metadata")
-    lastfm = root_repository().load("library_lastfm_artist_metadata")
+    metadata = {} if linking else root_repository().load("library_artist_metadata")
+    lastfm = {} if linking else root_repository().load("library_lastfm_artist_metadata")
     from .lidarr import config as lidarr_config
 
     lidarr_base = lidarr_config(root_repository()).get("url", "").rstrip("/")
@@ -530,7 +552,7 @@ def build_library():
     description_order = metadata_order(prefs, "artist_description")
     popular_order = metadata_order(prefs, "popular_tracks")
     artists = []
-    for source in lidarr.get("artists", []):
+    for source in [] if linking else lidarr.get("artists", []):
         aid = str(source.get("id"))
         mbid = linked_by_id.get(aid) or source.get("mbid", "")
         albums = albums_by_artist.get(aid, [])
@@ -798,9 +820,68 @@ def build_library():
     _record_log(
         "INFO" if elapsed >= 1 else "DEBUG",
         "Library",
-        f"Prepared Library view: {len(artists)} artists, {len(rows)} releases, {len(errors)} findings in {elapsed:.2f}s",
+        f"Prepared Library {'linking index' if linking else 'view'}: {len(artists)} artists, {len(rows)} releases, {len(errors)} findings in {elapsed:.2f}s",
     )
     return result
+
+
+def build_library():
+    return _build_library()
+
+
+def build_link_library():
+    """Use Library's album rules without catalog-only releases or Issues work."""
+    return _build_library(linking=True)
+
+
+def cached_link_library():
+    from .accounts import actor, root_repository
+    from .api import _config
+    from .saved_views import revision
+
+    user = actor() or {}
+    config = _config(read_only=True, namespaces=[])
+    repo, root = config.repository, root_repository()
+    credentials = hashlib.sha256(
+        json.dumps(config.config.get("plex", {}), sort_keys=True).encode()
+    ).hexdigest()
+    key = (
+        str(repo.directory),
+        str(root.directory),
+        str(user.get("id") or "server"),
+        bool(user.get("admin")),
+        bool(user.get("can_library_issues")),
+        credentials,
+    )
+
+    def stamp():
+        return (revision(repo, _LINK_NAMESPACES), revision(root, _LINK_NAMESPACES))
+
+    current = stamp()
+    with _view_lock:
+        entry = _link_cache.get(key)
+        if entry and entry[0] == current:
+            _link_cache.move_to_end(key)
+            return entry[1]
+        loading = _link_loading.setdefault(key, threading.Lock())
+    with loading:
+        current = stamp()
+        with _view_lock:
+            entry = _link_cache.get(key)
+            epoch = _view_epoch
+            if entry and entry[0] == current:
+                _link_cache.move_to_end(key)
+                return entry[1]
+        data = build_link_library()
+        # Never label an in-flight older snapshot as current after a mutation.
+        if stamp() != current:
+            return data
+        with _view_lock:
+            if epoch == _view_epoch:
+                _link_cache[key] = (current, data)
+                while len(_link_cache) > 16:
+                    _link_cache.popitem(last=False)
+        return data
 
 
 def cached_library(refresh=False):
@@ -851,7 +932,7 @@ def cached_library(refresh=False):
 def link_targets(model=None):
     """Library's unified saved album records, with its current artwork and tracks."""
     if model is None:
-        model = cached_library()
+        model = cached_link_library()
     records = model["_rows_by_album"]
     result = {}
     for ident, row in records.items():
@@ -1412,14 +1493,16 @@ def register(app):
                 raise
         from .library_artwork import serve as alternate_image
 
-        model = cached_library()
+        model = cached_link_library()
         return alternate_image(
             config, model["_artwork_sources"].get("plex:" + plex_album_id, []), external_only=True
         )
 
     @app.get("/api/library/albums/{album_id}/artwork")
     def saved_album_artwork(album_id: str):
-        model = cached_library()
+        model = cached_link_library()
+        if album_id not in model["_rows_by_album"]:
+            model = cached_library()
         if album_id not in model["_rows_by_album"]:
             raise HTTPException(404, "Album artwork unavailable")
         from .library_artwork import serve
@@ -1623,7 +1706,7 @@ def register(app):
         from .library_artwork import serve as alternate_image
 
         return alternate_image(
-            config, cached_library()["_artwork_sources"].get(album_id, []), external_only=True
+            config, cached_link_library()["_artwork_sources"].get(album_id, []), external_only=True
         )
 
     def artwork_candidates(target, target_id, kind):

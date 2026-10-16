@@ -109,6 +109,31 @@ def _request(base, entity, params, public, timeout):
     return response.json()
 
 
+def _public_fallback(repo, entity, params, timeout, reason):
+    """Retry a transient public failure once, without blaming the mirror."""
+    for attempt in range(2):
+        try:
+            result = _request(PUBLIC_BASE, entity, params, True, timeout)
+            return _routed(result, "public_fallback", PUBLIC_BASE, reason)
+        except (network.Timeout, network.ConnectionError):
+            if attempt:
+                raise
+            _log(
+                repo,
+                "MusicBrainz public fallback could not connect or timed out -> retrying public once",
+                "WARNING",
+            )
+        except network.HTTPError as exc:
+            status = exc.response.status_code if exc.response is not None else None
+            if attempt or status is None or status < 500:
+                raise
+            _log(
+                repo,
+                f"MusicBrainz public fallback returned HTTP {status} -> retrying public once",
+                "WARNING",
+            )
+
+
 def get(repo, entity, params=None, timeout=(5, 20)):
     """Route indexed queries to public MB and direct/browse reads to the mirror."""
     from .musicbrainz_settings import settings
@@ -150,17 +175,6 @@ def get(repo, entity, params=None, timeout=(5, 20)):
     )
     try:
         result = _request(mirror, entity, params, False, timeout)
-        if search and not _search_has_results(result, bare_entity):
-            _log(
-                repo, "MusicBrainz mirror search returned no results -> public fallback", "WARNING"
-            )
-            return _routed(
-                _request(PUBLIC_BASE, entity, params, True, timeout),
-                "public_fallback",
-                PUBLIC_BASE,
-                "mirror_empty",
-            )
-        return _routed(result, "mirror", mirror)
     except (network.Timeout, network.ConnectionError):
         _log(repo, "MusicBrainz mirror failed -> public fallback", "WARNING")
     except network.HTTPError as exc:
@@ -168,9 +182,9 @@ def get(repo, entity, params=None, timeout=(5, 20)):
         if status is None or status < 500:
             raise
         _log(repo, "MusicBrainz mirror failed -> public fallback", "WARNING")
-    return _routed(
-        _request(PUBLIC_BASE, entity, params, True, timeout),
-        "public_fallback",
-        PUBLIC_BASE,
-        "mirror_failed",
-    )
+    else:
+        if not search or _search_has_results(result, bare_entity):
+            return _routed(result, "mirror", mirror)
+        _log(repo, "MusicBrainz mirror search returned no results -> public fallback", "WARNING")
+        return _public_fallback(repo, entity, params, timeout, "mirror_empty")
+    return _public_fallback(repo, entity, params, timeout, "mirror_failed")

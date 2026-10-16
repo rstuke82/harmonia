@@ -61,5 +61,7 @@ def model_from_inventory(inventory, links=None):
 
 
 def library_targets(inventory):
-    with patch("harmonia.library.cached_library", return_value=model_from_inventory(inventory)):
+    with patch(
+        "harmonia.library.cached_link_library", return_value=model_from_inventory(inventory)
+    ):
         return link_targets()

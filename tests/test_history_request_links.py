@@ -55,7 +55,9 @@ class HistoryRequestTests(unittest.TestCase):
             if getattr(r, "path", "") == "/api/discover/history-gaps"
         ).__wrapped__
         with (
-            patch("harmonia.library.cached_library", return_value=model_from_inventory(inventory)),
+            patch(
+                "harmonia.library.cached_link_library", return_value=model_from_inventory(inventory)
+            ),
             patch(
                 "harmonia.user_preferences.preferences", return_value={"lastfm_username": "user"}
             ),

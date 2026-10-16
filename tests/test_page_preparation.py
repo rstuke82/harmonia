@@ -154,7 +154,7 @@ class PagePreparation(unittest.TestCase):
         rows = [{"artist": "Band", "album": "Album", "mbid": "album"} for _ in range(100)]
         tracks.walks = 0
         with (
-            patch.object(library, "cached_library", return_value=model),
+            patch.object(library, "cached_link_library", return_value=model),
             patch.object(self.repo, "load", side_effect=load),
             patch("harmonia.config.Config", return_value=self.cfg),
             patch("harmonia.discover.root_repository", return_value=self.repo),

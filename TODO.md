@@ -13,3 +13,6 @@
 
 - [x] **Sidebar failure wording.** Describe previous failures, interruptions and partial completion explicitly; link directly to the relevant job and acknowledge only loaded, expanded details. Implemented in build 104.
 - [ ] **Deployment validation.** Confirm current foreground latency and live Plex playlist behavior on the deployment; scan the exact new runtime image after Docker authentication or source push.
+
+- [x] **Album linking latency.** Use a separate account-scoped Library index for linking, history availability and existing-album artwork; avoid catalog-only releases, Issues and artist profile preparation. Shared Library rules preserve artwork and identity. Implemented in build 105; deployed timings remain to be checked.
+- [x] **MusicBrainz fallback diagnostics.** Keep mirror and public exception boundaries separate, identify public failures correctly and retry transient public fallback failures once under the public limiter. Implemented in build 105.

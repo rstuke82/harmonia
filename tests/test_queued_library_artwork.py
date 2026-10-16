@@ -46,7 +46,7 @@ class UnifiedLibraryTests(unittest.TestCase):
     def test_picker_uses_current_library_cover_and_one_unified_target(self):
         model = self.model()
         model["_rows_by_album"]["release"]["artwork"] = "/api/current-selected-cover?v=new"
-        with patch.object(library, "cached_library", return_value=model):
+        with patch.object(library, "cached_link_library", return_value=model):
             targets = library.link_targets()
             rows = discover._history_candidates(
                 targets,
@@ -68,7 +68,7 @@ class UnifiedLibraryTests(unittest.TestCase):
         model["_rows_by_album"]["plex:42"]["linked_lidarr_album_id"] = "release"
         model["_plex_tracks_by_album"]["42"][0]["album"] = "The Reason (Anniversary)"
         model["_album_links"] = {"release": {"plex_album_id": "42"}}
-        with patch.object(library, "cached_library", return_value=model):
+        with patch.object(library, "cached_link_library", return_value=model):
             targets = library.link_targets()
         self.assertEqual(len(targets), 1)
         self.assertEqual(targets[0]["plex_tracks"][0]["plex_id"], "playable")
@@ -77,7 +77,7 @@ class UnifiedLibraryTests(unittest.TestCase):
         model = self.model()
         model["_rows_by_album"].pop("release")
         model["_rows_by_album"]["plex:42"]["linked_lidarr_album_id"] = None
-        with patch.object(library, "cached_library", return_value=model):
+        with patch.object(library, "cached_link_library", return_value=model):
             self.assertEqual(library.link_targets()[0]["target_type"], "plex")
         index = {"plex": model["_plex"], "playable_tracks": model["_plex_by_id"]}
         with (
@@ -375,7 +375,7 @@ class OptionalLidarrLibraryTests(unittest.TestCase):
                         repository=repo, config={"plex": {"url": "http://plex"}}
                     ),
                 ),
-                patch.object(library, "cached_library", return_value=model),
+                patch.object(library, "cached_link_library", return_value=model),
             ):
                 result = discover.availability(
                     [{"album": "Album", "artist": "Artist", "tracks": ["Song"]}],

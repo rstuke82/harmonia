@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.0.105 · Beta — 2026-10-16
+
+- Use a separately cached Library linking index for album linking and listening-history availability, without preparing catalog-only releases, Issues or artist profiles.
+- Reuse the same album identity, selected artwork, availability and track rules as Library; serve existing-album covers without forcing a full Library rebuild.
+- Keep linking caches scoped to account, permissions and credentials; invalidate for relevant album, artwork, track and inventory changes.
+- Attribute MusicBrainz public fallback failures correctly and retry transient public failures once within the public request limiter.
+
 ## 1.0.0.104 · Beta — 2026-10-16
 
 - Describe unreviewed historical job failures, interruptions and partial completions explicitly in navigation.
