@@ -294,7 +294,18 @@ def _build_library(*, linking=False):
     from .accounts import actor
 
     started = time.monotonic()
+    cpu_started = time.thread_time()
+    phases = []
+    phase_at = started
+
+    def phase(name):
+        nonlocal phase_at
+        now = time.monotonic()
+        phases.append(f"{name}={now - phase_at:.2f}s")
+        phase_at = now
+
     config, plex, lidarr, ctx = read()
+    phase("inventory")
     rows = []
     from .accounts import root_repository
 
@@ -356,6 +367,7 @@ def _build_library(*, linking=False):
         )
         if not is_blocked(row)
     ]
+    phase("catalog")
     prefs = metadata_preferences(root_repository())
     artwork_overrides = root_repository().load("artwork_overrides")
     fanart_cache = root_repository().load("fanart_cache")
@@ -440,6 +452,7 @@ def _build_library(*, linking=False):
             row.get("album_id"), candidates, selected.get("selected_at")
         )
         row["year"] = next((dates[s] for s in date_order if dates.get(s)), "")
+    phase("artwork")
     from collections import defaultdict
 
     tracks = defaultdict(list)
@@ -492,6 +505,7 @@ def _build_library(*, linking=False):
                 "type": a.get("type") or "Other",
             }
         )
+    phase("album state")
     from .file_audit import report, decorate
     from .file_tools import settings as file_settings, plex_url
 
@@ -527,6 +541,7 @@ def _build_library(*, linking=False):
             root_repository(),
         )
     )
+    phase("issues")
     metadata = {} if linking else root_repository().load("library_artist_metadata")
     lastfm = {} if linking else root_repository().load("library_lastfm_artist_metadata")
     from .lidarr import config as lidarr_config
@@ -674,6 +689,7 @@ def _build_library(*, linking=False):
                 "plex_url": plex_url(plex, artist_plex) if artist_plex else "",
             }
         )
+    phase("artist profiles")
     rows_by_album = {str(r.get("album_id")): r for r in rows}
     errors_by_album = defaultdict(list)
     errors_by_plex = defaultdict(list)
@@ -814,13 +830,15 @@ def _build_library(*, linking=False):
                 artist["attention_count"] = 0
             for artist in artists:
                 artist["attention_count"] = 0
+    phase("projection")
     elapsed = time.monotonic() - started
     from .api import _record_log
 
     _record_log(
         "INFO" if elapsed >= 1 else "DEBUG",
         "Library",
-        f"Prepared Library {'linking index' if linking else 'view'}: {len(artists)} artists, {len(rows)} releases, {len(errors)} findings in {elapsed:.2f}s",
+        f"Prepared Library {'linking index' if linking else 'view'}: {len(artists)} artists, {len(rows)} releases, {len(errors)} findings in {elapsed:.2f}s; CPU={time.thread_time() - cpu_started:.2f}s; "
+        + ", ".join(phases),
     )
     return result
 

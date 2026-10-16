@@ -16,3 +16,5 @@
 
 - [x] **Album linking latency.** Use a separate account-scoped Library index for linking, history availability and existing-album artwork; avoid catalog-only releases, Issues and artist profile preparation. Shared Library rules preserve artwork and identity. Implemented in build 105; deployed timings remain to be checked.
 - [x] **MusicBrainz fallback diagnostics.** Keep mirror and public exception boundaries separate, identify public failures correctly and retry transient public fallback failures once under the public limiter. Implemented in build 105.
+
+- [x] **Background matching cost and contention diagnostics.** Reduce repeated text parsing, prefilter strong titles and bound candidate ranking without changing acceptance rules. Add Library phase/CPU and slow SQLite timings. Implemented in build 106; deployment logs still need to distinguish remaining full-view CPU from database waits.

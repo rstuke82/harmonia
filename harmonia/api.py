@@ -1205,22 +1205,25 @@ def missing_tracks(scope: Literal["all", "favorites"] = "all"):
 
 @app.post("/api/missing/candidates")
 def missing_candidates(request: MissingCandidateRequest):
+    started = time.monotonic()
+    cpu_started = time.thread_time()
     config = _config(read_only=True, namespaces=["artist_aliases"])
     from .library import playable_tracks
 
     library = playable_tracks()
+    inventory_elapsed = time.monotonic() - started
     source = {
         "title": request.title,
         "artist": request.artist,
         "album": request.album,
         "duration": request.duration,
     }
-    rows = []
-    for track in library:
-        if request.query:
-            import re
+    import re
 
-            query_tokens = re.findall(r"\w+", Matcher._normalize_match_text(request.query))
+    query_tokens = re.findall(r"\w+", Matcher._normalize_match_text(request.query or ""))
+    if query_tokens:
+        filtered = []
+        for track in library:
             candidate_tokens = set(
                 re.findall(
                     r"\w+",
@@ -1229,54 +1232,16 @@ def missing_candidates(request: MissingCandidateRequest):
                     ),
                 )
             )
-            if not all(token in candidate_tokens for token in query_tokens):
-                continue
-        details = Matcher.score_candidate(source, track)
-        rows.append(
-            {
-                "plex_id": str(track.get("plex_id", "")),
-                "title": track.get("title", ""),
-                "artist": track.get("artist", ""),
-                "album": track.get("album", ""),
-                "duration": track.get("duration"),
-                "source_duration": details.get("source_duration"),
-                "track_artist": track.get("track_artist"),
-                "album_artist": track.get("album_artist"),
-                "track_number": track.get("track_number"),
-                "disc_number": track.get("disc_number"),
-                "edition": track.get("edition"),
-                "_files": track.get("files", []),
-                "_guids": track.get("guids", []),
-                "_album_id": track.get("plex_album_id"),
-                "duration_delta": details.get("duration_delta"),
-                "score": round(details["adjusted_score"], 1),
-                "identity_score": round(details["identity_score"], 1),
-                "title_score": details["title_score"],
-                "artist_score": details["artist_score"],
-                "artist_credit_reason": details.get("artist_credit_reason", ""),
-                "album_score": details["album_score"],
-                "album_penalty": details["album_penalty"],
-                "title_variant_penalty": details["title_variant_penalty"],
-                "release_intent_penalty": details["release_intent_penalty"],
-            }
-        )
-    rows.sort(
-        key=lambda row: (
-            row["score"],
-            row["identity_score"],
-            row["title_score"],
-            row["artist_score"],
-            row["album_score"] or 0,
-        ),
-        reverse=True,
-    )
-    from .match_candidates import consolidate
+            if all(token in candidate_tokens for token in query_tokens):
+                filtered.append(track)
+        library = filtered
+    from .candidate_ranking import rank
 
-    result = consolidate(rows)[: request.limit]
+    result, scored = rank(source, library, request.limit)
     _record_log(
         "INFO",
         "Candidate search",
-        f"{request.title} — {request.artist}: returned {len(result)} candidates from {len(library)} library tracks",
+        f"{request.title} — {request.artist}: returned {len(result)} candidates from {len(library)} library tracks; inventory={inventory_elapsed:.2f}s, ranking={time.monotonic() - started - inventory_elapsed:.2f}s ({scored} fully scored), CPU={time.thread_time() - cpu_started:.2f}s",
         config,
     )
     for row in result[:5]:
@@ -2687,10 +2652,12 @@ def remove_playlist(playlist_key: str):
 
 @app.post("/api/missing/automatic")
 def retry_automatic(request: MissingCandidateRequest):
+    started, cpu_started = time.monotonic(), time.thread_time()
     config = _config(read_only=True, namespaces=["artist_aliases"])
     from .library import playable_tracks
 
     library = playable_tracks()
+    inventory_elapsed = time.monotonic() - started
     source = request.model_dump(include={"title", "artist", "album", "duration", "artists"})
     # Deliberately omit saved mappings so the unchanged matcher gets a fresh try.
     candidate_id = Matcher.match_track(source, library, {})
@@ -2712,7 +2679,10 @@ def retry_automatic(request: MissingCandidateRequest):
         else "no acceptable automatic match"
     )
     _record_log(
-        "INFO", "Automatic matching", f"{request.title} — {request.artist}: {outcome}", config
+        "INFO",
+        "Automatic matching",
+        f"{request.title} — {request.artist}: {outcome}; inventory={inventory_elapsed:.2f}s, matching={time.monotonic() - started - inventory_elapsed:.2f}s, CPU={time.thread_time() - cpu_started:.2f}s",
+        config,
     )
     return {"candidate": candidate}
 

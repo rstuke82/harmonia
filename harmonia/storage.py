@@ -3,6 +3,8 @@
 from contextlib import contextmanager
 import json
 import threading
+import time
+import logging
 from functools import lru_cache
 import sqlite3
 import os
@@ -49,6 +51,43 @@ def get_repository(directory):
     # Cache schema initialization only; connections and state remain request-local.
     with _repository_lock:
         return _repository(str(Path(directory).resolve()))
+
+
+class _TimedConnection(sqlite3.Connection):
+    """Slow-operation diagnostics without SQL values, secrets or recursive DB logs."""
+
+    def execute(self, sql, parameters=(), /):
+        started, cpu = time.monotonic(), time.thread_time()
+        try:
+            return super().execute(sql, parameters)
+        finally:
+            elapsed = time.monotonic() - started
+            if elapsed >= 0.5:
+                # Log only a fixed statement category, never SQL text/parameters.
+                verb = str(sql).lstrip().split(None, 1)[0].upper() if str(sql).strip() else "SQL"
+                label = (
+                    verb
+                    if verb in {"SELECT", "INSERT", "UPDATE", "DELETE", "BEGIN", "PRAGMA"}
+                    else "SQL"
+                )
+                logging.getLogger("uvicorn.error").info(
+                    "Database timing: %s execute %.2fs, thread CPU %.2fs",
+                    label,
+                    elapsed,
+                    time.thread_time() - cpu,
+                )
+
+    def __exit__(self, *args):
+        started = time.monotonic()
+        try:
+            return super().__exit__(*args)
+        finally:
+            elapsed = time.monotonic() - started
+            if elapsed >= 0.5:
+                logging.getLogger("uvicorn.error").info(
+                    "Database timing: transaction completion %.2fs",
+                    elapsed,
+                )
 
 
 class Repository:
@@ -327,7 +366,7 @@ class Repository:
     @contextmanager
     def connect(self):
         self._check_database_files()
-        db = sqlite3.connect(self.path, timeout=30)
+        db = sqlite3.connect(self.path, timeout=30, factory=_TimedConnection)
         try:
             db.execute("PRAGMA busy_timeout=30000")
             db.execute("PRAGMA synchronous=NORMAL")

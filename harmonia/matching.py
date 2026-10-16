@@ -157,9 +157,14 @@ class Matcher:
 
     @classmethod
     def _taylors_version(cls, track):
-        value = cls._normalize_match_text(
-            " ".join(str(track.get(k) or "") for k in ("title", "album"))
+        return cls._has_taylors_version(
+            str(track.get("title") or ""), str(track.get("album") or "")
         )
+
+    @classmethod
+    @lru_cache(maxsize=65536)
+    def _has_taylors_version(cls, title, album):
+        value = cls._normalize_match_text(title + " " + album)
         return bool(re.search(r"\btaylors?\s+version\b", value))
 
     @classmethod
@@ -168,6 +173,23 @@ class Matcher:
         if cls._taylors_version(source) != cls._taylors_version(candidate):
             return True
         return cls._feature_identity_reason(source, candidate).startswith("Conflict:")
+
+    @classmethod
+    @lru_cache(maxsize=65536)
+    def _guest_names(cls, title, artist, album):
+        values = []
+        for raw in (title, artist, album):
+            value = cls._normalize_match_text(raw)
+            for credit in re.findall(
+                r"(?:^|[\s(\[\-:])(?:feat(?:uring)?\.?|ft\.?)\s+([^\)\]]+)", value
+            ):
+                credit = re.sub(r"\s*-\s*(?:single|ep)$", "", credit).strip()
+                values.extend(
+                    part.strip()
+                    for part in re.split(r"\s*(?:,|&|\band\b)\s*", credit)
+                    if part.strip()
+                )
+        return tuple(values)
 
     @classmethod
     def _feature_identity_reason(cls, source, candidate):
@@ -187,19 +209,9 @@ class Matcher:
             )
 
         def guests(track):
-            values = []
-            for key in ("title", "artist", "album"):
-                value = cls._normalize_match_text(str(track.get(key) or ""))
-                for credit in re.findall(
-                    r"(?:^|[\s(\[\-:])(?:feat(?:uring)?\.?|ft\.?)\s+([^\)\]]+)", value
-                ):
-                    credit = re.sub(r"\s*-\s*(?:single|ep)$", "", credit).strip()
-                    values.extend(
-                        part.strip()
-                        for part in re.split(r"\s*(?:,|&|\band\b)\s*", credit)
-                        if part.strip()
-                    )
-            return values
+            return cls._guest_names(
+                *(str(track.get(key) or "") for key in ("title", "artist", "album"))
+            )
 
         source_guests, candidate_guests = guests(source), guests(candidate)
         if not source_guests and not candidate_guests:
@@ -288,6 +300,48 @@ class Matcher:
 
     @classmethod
     @lru_cache(maxsize=65536)
+    def _title_parts(cls, title):
+        raw = re.sub(
+            r"\s*(?:[([]\s*taylors?\s+version\s*[)\]]|[-:]\s*taylors?\s+version)\s*",
+            " ",
+            cls._normalize_match_text(title),
+        ).strip()
+        abbrev = re.sub(r"(?<=[a-z])\.(?=(?:[a-z]\.)|(?:\s|$))", "", raw, flags=re.I)
+        meta = cls._strip_title_metadata(raw)
+        base, trailing = cls._strip_trailing_parenthetical(meta)
+        return raw, abbrev, meta, base, trailing
+
+    @classmethod
+    @lru_cache(maxsize=4)
+    def _title_choices(cls, titles):
+        # Only immutable title strings are shared. No account records or decisions.
+        return tuple(
+            fuzz.sorted_tokens(part) for title in titles for part in cls._title_parts(title)[:3]
+        )
+
+    @classmethod
+    def _strong_title_indices(cls, source_title, library):
+        from rapidfuzz import process, fuzz as rapid_fuzz
+
+        titles = tuple(str(row.get("title", "")) for row in library)
+        flat = cls._title_choices(titles)
+        # A conservative superset of every comparison in _title_score. The
+        # original scorer verifies one-sided subtitles and integer rounding.
+        forms = set(fuzz.sorted_tokens(part) for part in cls._title_parts(source_title)[:4])
+        indices = set()
+        for form in forms:
+            indices.update(
+                index // 3
+                for _, _, index in process.extract_iter(
+                    form, flat, scorer=rapid_fuzz.ratio, processor=None, score_cutoff=94.5
+                )
+            )
+        return sorted(
+            index for index in indices if cls._title_score(source_title, titles[index])[0] >= 95
+        )
+
+    @classmethod
+    @lru_cache(maxsize=65536)
     def _title_score(cls, source_title: str, plex_title: str) -> Tuple[int, int]:
         """
         Return (best_title_score, raw_title_score).
@@ -304,14 +358,10 @@ class Matcher:
         an artificial 100% match.
         """
 
-        def base_title(value):
-            value = cls._normalize_match_text(value)
-            return re.sub(
-                r"\s*(?:[([]\s*taylors?\s+version\s*[)\]]|[-:]\s*taylors?\s+version)\s*", " ", value
-            ).strip()
-
-        source_raw = base_title(source_title)
-        plex_raw = base_title(plex_title)
+        source_raw, source_abbrev, source_meta, source_base, source_had_trailing = cls._title_parts(
+            source_title
+        )
+        plex_raw, plex_abbrev, plex_meta, _, plex_had_trailing = cls._title_parts(plex_title)
 
         raw_score = fuzz.token_sort_ratio(
             source_raw,
@@ -320,22 +370,6 @@ class Matcher:
 
         scores = [raw_score]
 
-        # Treat common dotted abbreviations as equivalent display styling:
-        #   3 A.M. <-> 3 am
-        #   H.O.V.A. <-> HOVA
-        abbreviation_pattern = re.compile(
-            r"(?<=[a-z])\.(?=(?:[a-z]\.)|(?:\s|$))",
-            flags=re.IGNORECASE,
-        )
-        source_abbrev = abbreviation_pattern.sub(
-            "",
-            source_raw,
-        )
-        plex_abbrev = abbreviation_pattern.sub(
-            "",
-            plex_raw,
-        )
-
         if source_abbrev and plex_abbrev:
             scores.append(
                 fuzz.token_sort_ratio(
@@ -343,9 +377,6 @@ class Matcher:
                     plex_abbrev,
                 )
             )
-
-        source_meta = cls._strip_title_metadata(source_raw)
-        plex_meta = cls._strip_title_metadata(plex_raw)
 
         if source_meta and plex_meta:
             scores.append(
@@ -371,9 +402,6 @@ class Matcher:
                 )
             )
 
-        source_base, source_had_trailing = cls._strip_trailing_parenthetical(source_meta)
-        plex_base, plex_had_trailing = cls._strip_trailing_parenthetical(plex_meta)
-
         # Generic parenthetical fallback only if ONE side has it.
         if source_had_trailing and not plex_had_trailing:
             if source_base and plex_meta:
@@ -395,6 +423,7 @@ class Matcher:
         return max(scores), raw_score
 
     @classmethod
+    @lru_cache(maxsize=65536)
     def _title_remix_credit(cls, title: str) -> str:
         """
         Extract a named remix credit from a title.
@@ -532,6 +561,7 @@ class Matcher:
         return expanded
 
     @classmethod
+    @lru_cache(maxsize=65536)
     def _artist_variants(
         cls,
         artist: str,
@@ -554,7 +584,7 @@ class Matcher:
         value = cls._normalize_match_text(artist)
 
         if not value:
-            return [""]
+            return ("",)
 
         variants = [value]
         if value.startswith("the ") and len(value) > 4:
@@ -587,7 +617,7 @@ class Matcher:
                     if candidate and candidate not in variants:
                         variants.append(candidate)
 
-        return cls._expand_artist_aliases(variants)
+        return tuple(variants)
 
     @classmethod
     def _artist_score(
@@ -604,14 +634,18 @@ class Matcher:
             bool(remix_credit) and remix_credit in cls._normalize_match_text(source_artist)
         )
 
-        source_variants = cls._artist_variants(
-            source_artist,
-            allow_primary_collaborator=allow_source_primary,
+        source_variants = cls._expand_artist_aliases(
+            cls._artist_variants(
+                source_artist,
+                allow_primary_collaborator=allow_source_primary,
+            )
         )
 
-        plex_variants = cls._artist_variants(
-            plex_artist,
-            allow_primary_collaborator=cls._title_has_feature_credit(plex_title),
+        plex_variants = cls._expand_artist_aliases(
+            cls._artist_variants(
+                plex_artist,
+                allow_primary_collaborator=cls._title_has_feature_credit(plex_title),
+            )
         )
 
         return max(
@@ -876,6 +910,11 @@ class Matcher:
         plex_artist = str(plex_track.get("artist", ""))
         plex_album = str(plex_track.get("album", "") or "")
 
+        feature_reason = cls._feature_identity_reason(source_track, plex_track)
+        version_mismatch = cls._taylors_version(source_track) != cls._taylors_version(
+            plex_track
+        ) or feature_reason.startswith("Conflict:")
+
         title_score, raw_title_score = cls._title_score(
             source_title,
             plex_title,
@@ -928,11 +967,7 @@ class Matcher:
         # lists differ. It never substitutes for artist or song identity.
         if not lead and cls._title_has_feature_credit(source_title) and "," in source_artist:
             lead = source_artist.split(",", 1)[0].strip()
-        if (
-            lead
-            and title_score >= 95
-            and not cls._recording_version_mismatch(source_track, plex_track)
-        ):
+        if lead and title_score >= 95 and not version_mismatch:
             lead_score = cls._artist_score(lead, plex_artist, source_title, plex_title)
             from .track_duration import source_duration
 
@@ -1068,10 +1103,9 @@ class Matcher:
         if unwanted_plex_types or unwanted_title_variant_types or missing_title_intent:
             album_bonus = 0.0
 
-        feature_reason = cls._feature_identity_reason(source_track, plex_track)
         if feature_reason:
             credit_reason = feature_reason
-        if cls._recording_version_mismatch(source_track, plex_track):
+        if version_mismatch:
             album_provenance_mismatch = True
             album_provenance_penalty = max(album_provenance_penalty, 40)
             album_bonus = 0.0
@@ -1185,11 +1219,9 @@ class Matcher:
         # avoid expensive album/credit scoring for unrelated titles.
         strong = []
         pre_scored = {}
-        for index, plex_track in enumerate(plex_library):
-            title_score, _ = cls._title_score(
-                str(source_track.get("title", "")), str(plex_track.get("title", ""))
-            )
-            if title_score < 95 or cls._recording_version_mismatch(source_track, plex_track):
+        for index in cls._strong_title_indices(str(source_track.get("title", "")), plex_library):
+            plex_track = plex_library[index]
+            if cls._recording_version_mismatch(source_track, plex_track):
                 continue
             details = cls.score_candidate(source_track, plex_track)
             pre_scored[index] = details

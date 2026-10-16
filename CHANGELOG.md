@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.0.106 · Beta — 2026-10-16
+
+- Reduce matching CPU during health checks and automatic retries with cached text preparation and a conservative native title prefilter; retain full fuzzy fallback and recording safeguards.
+- Rank review candidates using optimistic score bounds, preserving exhaustive ordering, duplicate groups and tie handling while avoiding unnecessary full scoring.
+- Log inventory, ranking, Library preparation phases, thread CPU and slow SQLite statements/commits without SQL values or additional database writes.
+
 ## 1.0.0.105 · Beta — 2026-10-16
 
 - Use a separately cached Library linking index for album linking and listening-history availability, without preparing catalog-only releases, Issues or artist profiles.
