@@ -38,6 +38,17 @@ const badge=button.props.children.find(node=>node?.props?.className?.includes('q
 values['bridge-account-id']='second-account';state=undefined;assert.match(nav([failure()]).props['aria-label'],/Previous job failed/);
 values['harmonia-job-reviews:second-account']='broken';assert.equal(Object.keys(review.exports.reviewedJobs()).length,0);
 storageBlocked=true;state=undefined;button=nav([failure('blocked-storage')]);review.exports.markJobReviewed(failure('blocked-storage'));assert.equal(nav([failure('blocked-storage')]).props['aria-label'],'Jobs: No activity');storageBlocked=false;
+// Clear the full alert backlog in one event; retain account isolation and new failures.
+values['bridge-account-id']='batch-account';state=undefined;
+const backlog=Array.from({length:250},(_,i)=>failure('backlog-'+i));
+assert.match(nav(backlog).props['aria-label'],/Previous job failed/);
+review.exports.markJobsReviewed([...backlog,{id:'active',status:'running',finished_at:backlog[0].finished_at}]);
+assert.equal(nav(backlog).props['aria-label'],'Jobs: No activity');
+assert.equal(Object.keys(review.exports.reviewedJobs()).length,250);
+assert.equal(review.exports.reviewedJobs().active,undefined);
+state=undefined;assert.equal(nav(backlog).props['aria-label'],'Jobs: No activity','Clear survives reload');
+assert.match(nav([failure('new-failure'),...backlog]).props['aria-label'],/Previous job failed/);
+values['bridge-account-id']='other-batch-account';state=undefined;assert.match(nav(backlog).props['aria-label'],/Previous job failed/);
 // Run the actual Activity acknowledgement effect with loaded, failed, collapsed, and loading detail states.
 function acknowledgement({detail=null,error='',open=true}={}){
  const job=failure('details');let effects=[],i=0,marked=[];

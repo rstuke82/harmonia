@@ -199,7 +199,7 @@ See [deployment and security guidance](SECURITY-DEPLOYMENT.md) for forwarding he
 
 ## API access
 
-Personal API keys start read-only. Enable playlist or album-request permissions in Account → API Access when needed for automation. Only administrators can enable Lidarr webhook access. Existing keys without saved permissions become read-only; enable the required permissions before using those integrations. Changing permissions keeps the same key. Keys never expire; regenerating a key immediately disables its previous value. Administrator settings and key management require a browser session.
+Personal API keys start read-only. Enable playlist or album-request permissions in Account → API Access when needed for automation. Only administrators can enable Lidarr webhook access. Existing keys without saved permissions become read-only; enable the required permissions before using those integrations. Changing permissions keeps the same key. Keys never expire; regenerating a key immediately disables its previous value. Newly generated keys remain visible and copyable in Account → API Access. Administrator settings and key management require a browser session.
 
 ## Troubleshooting
 

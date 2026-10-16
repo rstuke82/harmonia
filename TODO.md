@@ -18,3 +18,7 @@
 - [x] **MusicBrainz fallback diagnostics.** Keep mirror and public exception boundaries separate, identify public failures correctly and retry transient public fallback failures once under the public limiter. Implemented in build 105.
 
 - [x] **Background matching cost and contention diagnostics.** Reduce repeated text parsing, prefilter strong titles and bound candidate ranking without changing acceptance rules. Add Library phase/CPU and slow SQLite timings. Implemented in build 106; deployment logs still need to distinguish remaining full-view CPU from database waits.
+
+- [ ] **Observed background contention.** Build 107 deployment shows a 45.07s full Library build (8.23s thread CPU), an 18.43s linking build (1.49s CPU), slow SQLite executions with little thread CPU, and job polling dropping from 1–3s to 0.09s after health completion. Isolate CPU scheduling/GIL pressure from actual database/file I/O waits before changing locking.
+
+- [x] **Repeat-copy API keys and clear historical alerts.** Retain newly generated keys for the owning browser session and add bulk acknowledgement in Job history. Implemented in build 108.

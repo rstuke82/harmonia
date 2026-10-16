@@ -3,11 +3,11 @@ const ts=require('../web/node_modules/typescript'),React=require('../web/node_mo
 const job=(id,status,created,extra={})=>({id,status,created_at:created,action:'sync',progress:id,payload:{},result:{},...extra});
 const active=[job('queued-new','queued','2026-10-10T03:00:00'),job('stopping','cancelling','2026-10-10T01:00:00'),job('queued-old','queued','2026-10-10T02:00:00'),job('running','running','2026-10-10T00:00:00')];
 const completed=[job('success','completed','2026-10-09T00:00:00',{finished_at:'2026-10-10T01:00:00'}),job('failure','failed','2026-10-08T00:00:00',{finished_at:'2026-10-10T02:00:00'}),job('cancelled','cancelled','2026-10-07T00:00:00'),job('interrupted','interrupted','2026-10-06T00:00:00')];
-const exportsObject={};let cursor=0;
-const states=['','',{active,rows:completed,total:4},0,'',false,''];
+const exportsObject={};let cursor=0,cleared=[];
+const states=['','',{}, {active,rows:completed,total:4},0,'',false,''];
 const api={activeJob:j=>['running','cancelling','queued'].includes(j.status),activityJob:j=>!['prepare_views','request_status'].includes(j.action),api:{},request:()=>Promise.resolve({})};
 const code=ts.transpileModule(fs.readFileSync(path.join(__dirname,'../web/src/JobsPanel.tsx'),'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2022}}).outputText;
-vm.runInNewContext(code,{exports:exportsObject,require:n=>n==='react'?{...React,useState:()=>[states[cursor++],()=>{}],useEffect:()=>{}}:n==='react/jsx-runtime'?require('../web/node_modules/react/jsx-runtime'):n==='./api'?api:n==='./Auth'?{useAccount:()=>({id:'owner',admin:true})}:n==='./Activity'?{actionName:v=>v,jobResultLabel:j=>j.status}:n==='./labels'?{displayText:v=>v}:n==='./HealthCard'?{stamp:v=>v}:{default:()=>null}});
+vm.runInNewContext(code,{exports:exportsObject,require:n=>n==='react'?{...React,useState:()=>[states[cursor++],()=>{}],useEffect:()=>{}}:n==='react/jsx-runtime'?require('../web/node_modules/react/jsx-runtime'):n==='./api'?api:n==='./Auth'?{useAccount:()=>({id:'owner',admin:true})}:n==='./Activity'?{actionName:v=>v,jobResultLabel:j=>j.status,jobNeedsAttention:j=>['failed','interrupted'].includes(j.status)||j.result?.partial_success}:n==='./jobReview'?{reviewedJobs:()=>({}),markJobsReviewed:jobs=>cleared=jobs}:n==='./labels'?{displayText:v=>v}:n==='./HealthCard'?{stamp:v=>v}:{default:()=>null}});
 const sections=exportsObject.jobHistorySections(active,completed);
 assert.deepEqual(Array.from(sections[0][1],j=>j.id),['running','stopping']);
 assert.deepEqual(Array.from(sections[1][1],j=>j.id),['queued-old','queued-new']);
@@ -18,3 +18,9 @@ assert(html.indexOf('queued-old')<html.indexOf('queued-new'));
 for(const status of ['failed','completed','cancelled','interrupted'])assert(html.includes(status));
 assert(!html.includes('Playlist worker</h3>'));
 console.log('Passed: Running/cancelling, queue order, completion order, rendered section headings and retained terminal outcomes.');
+
+cursor=0;
+const partial=job('partial','completed','2026-10-10T00:00:00',{finished_at:'2026-10-10T02:00:00',result:{partial_success:true}});
+const tree=exportsObject.JobHistory({jobs:[...active,...completed,partial],refresh:async()=>{throw Error('Clear must not change server jobs')}});
+const clear=tree.props.children[0].props.children[1].props.children[0];
+assert.equal(clear.props.children,'Clear job alerts');assert.equal(clear.props.disabled,false);clear.props.onClick();assert.deepEqual(Array.from(cleared,j=>j.id),['failure','partial']);

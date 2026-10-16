@@ -12,7 +12,7 @@ export default function ActivityNav({jobs,page,mobile=false}:{jobs:Job[];page:st
   const review=(event:Event)=>{
    const update=event as CustomEvent
    if(isCurrentReview(update)&&typeof update.detail.id==='string'&&typeof update.detail.finished_at==='string'){
-    setReviewed(previous=>({...previous,[update.detail.id]:update.detail.finished_at}))
+    setReviewed(previous=>({...previous,...(update.detail.reviews||{[update.detail.id]:update.detail.finished_at})}))
    }
   }
   window.addEventListener(jobReviewedEvent,review)

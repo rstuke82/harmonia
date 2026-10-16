@@ -146,6 +146,7 @@ class Beta11API(unittest.TestCase):
             accounts.verify("NEW_PLEX_TOKEN")
         after = accounts.users()["1"]
         self.assertEqual(after["api_key_hash"], before["api_key_hash"])
+        self.assertEqual(after["api_key_value"], key)
         self.assertEqual(asyncio.run(self.http("/api/v1/status", token=key))[0], 200)
 
     def test_shared_playlist_url_queues_personal_add(self):

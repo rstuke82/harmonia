@@ -94,14 +94,17 @@ def public(user):
     }
 
 
-def api_key_status(user):
-    return {
+def api_key_status(user, *, reveal=False):
+    status = {
         "configured": bool(user.get("api_key_hash")),
         "scopes": user.get("api_key_scopes", ["read"]),
         "prefix": user.get("api_key_prefix", ""),
         "created_at": user.get("api_key_created_at"),
         "last_used_at": user.get("api_key_last_used_at"),
     }
+    if reveal:
+        status["key"] = user.get("api_key_value", "")
+    return status
 
 
 API_SCOPES = {"read", "playlists:write", "requests:write", "webhooks:lidarr"}
@@ -134,10 +137,11 @@ def create_api_key(user, replace=False):
         db.execute("BEGIN IMMEDIATE")
         current = _key_account(db, user)
         if current.get("api_key_hash") and not replace:
-            return api_key_status(current) | {"key": ""}
+            return api_key_status(current, reveal=True)
         token = "pb_live_" + secrets.token_urlsafe(32)
         current.update(
             api_key_hash=hashlib.sha256(token.encode()).hexdigest(),
+            api_key_value=token,
             api_key_prefix=token[:16] + "…",
             api_key_created_at=time.time(),
             api_key_last_used_at=None,
@@ -176,6 +180,7 @@ def revoke_api_key(user):
         current = _key_account(db, user)
         for key in (
             "api_key_hash",
+            "api_key_value",
             "api_key_prefix",
             "api_key_created_at",
             "api_key_last_used_at",
@@ -413,6 +418,7 @@ def verify(token, setup_hash=None, *, choose_library=False, library_key=None):
     # the non-expiring automation credential. Rotation is an explicit account action.
     for field in (
         "api_key_hash",
+        "api_key_value",
         "api_key_prefix",
         "api_key_created_at",
         "api_key_last_used_at",
@@ -683,7 +689,9 @@ def install(app):
 
     @app.get("/api/account/api-key")
     def get_api_key():
-        return api_key_status(actor())
+        return JSONResponse(
+            api_key_status(actor(), reveal=True), headers={"Cache-Control": "no-store"}
+        )
 
     @app.post("/api/account/api-key")
     def ensure_api_key():

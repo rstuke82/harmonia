@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.0.108 · Beta — 2026-10-16
+
+- Keep newly generated personal API keys available to view and copy again in Account through the owner’s browser session. Older hash-only keys require one manual regeneration.
+- Preserve keys through Plex reauthentication and permission changes; remove stored values on revocation and redact personal key patterns in diagnostics.
+- Add Clear job alerts in History to acknowledge previous failed, interrupted and partial results together without deleting history or changing running jobs.
+
 ## 1.0.0.107 · Beta — 2026-10-16
 
 - Clear automatically followed terminal activity after 30 seconds; keep deliberately opened job-history details available.

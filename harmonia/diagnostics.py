@@ -83,7 +83,7 @@ def configured_secrets(config):
 
 
 def redact(message, config=None, *, secrets=()):
-    text = str(message)
+    text = re.sub(r"\bpb_live_[A-Za-z0-9_-]{32,}\b", "[REDACTED]", str(message))
     values = configured_secrets(config) + [str(value) for value in secrets if value]
     variants = {
         variant

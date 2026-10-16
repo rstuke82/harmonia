@@ -8,7 +8,8 @@ import { api, Job, activeJob, activityJob } from './api'
 import { displayText } from './labels'
 import { stamp } from './HealthCard'
 import { Icon } from './Controls'
-import { actionName, jobResultLabel, showActivity } from './Activity'
+import { actionName, jobResultLabel, jobNeedsAttention, showActivity } from './Activity'
+import {markJobsReviewed,reviewedJobs,jobReviewedEvent,isCurrentReview} from './jobReview'
 export { actionName } from './Activity'
 const startupModes:Record<string,string>={never:'Never',missing:'If missing',outdated:'If missing or outdated',always:'Always'}
 const intervals:Record<number,string>={0:'Disabled',1:'Every hour',3:'Every 3 hours',6:'Every 6 hours',12:'Every 12 hours',24:'Daily',168:'Weekly'}
@@ -36,13 +37,21 @@ export function jobHistorySections(active:Job[],completed:Job[]):[string,Job[]][
 
 export function JobHistory({jobs,refresh}:{jobs:Job[];refresh:()=>Promise<void>}){
  const account=useAccount(),[owner,setOwner]=useState(''),[worker,setWorker]=useState('')
+ const [reviewed,setReviewed]=useState(reviewedJobs)
+ useEffect(()=>{
+   const update=(event:Event)=>{const e=event as CustomEvent;if(isCurrentReview(e))setReviewed(previous=>({...previous,...(e.detail.reviews||{[e.detail.id]:e.detail.finished_at})}))}
+   window.addEventListener(jobReviewedEvent,update)
+   return()=>window.removeEventListener(jobReviewedEvent,update)
+ },[])
+ const alerts=jobs.filter(j=>activityJob(j)&&!activeJob(j)&&jobNeedsAttention(j)&&j.finished_at&&Number.isFinite(Date.parse(j.finished_at))&&reviewed[j.id]!==j.finished_at)
+
  const [data,setData]=useState<any>(null),[offset,setOffset]=useState(0),[error,setError]=useState(''),[stopping,setStopping]=useState(false),[notice,setNotice]=useState('')
  const revision=jobs.map(j=>`${j.id}:${j.status}`).join('|')
  useEffect(()=>{let alive=true;request<any>(`/api/job-history?sections=true&offset=${offset}&owner=${encodeURIComponent(owner)}&worker=${encodeURIComponent(worker)}`).then(v=>{if(alive){setData(v);setError('')}}).catch(e=>{if(alive)setError(e.message)});return()=>{alive=false}},[offset,revision,owner,worker])
  const sectionRows=jobHistorySections(data?.active||[],data?.rows||[])
  async function stopPending(){if(!confirm('Stop every queued job? Jobs that are already running will continue.'))return;setStopping(true);setError('');setNotice('');try{const result=await api.cancelPending();setNotice(result.message);await refresh()}catch(e:any){setError(e.message)}finally{setStopping(false)}}
  const pending=jobs.some(j=>j.status==='queued')
- return <section className="panel"><div className="panel-head"><h2>Job history</h2><button disabled={stopping||!pending} onClick={stopPending}>{stopping?'Stopping…':'Stop Pending Jobs'}</button></div>{notice&&<p className="success-notice" role="status">{notice}</p>}<div className="job-history-filters"><label>Worker<select value={worker} onChange={e=>{setWorker(e.target.value);setOffset(0)}}><option value="">All workers</option>{["playlist","health","metadata","library","downloads","lookup","maintenance"].map(v=><option key={v} value={v}>{v[0].toUpperCase()+v.slice(1)}</option>)}</select></label>{account?.admin&&<label>Show activity<select value={owner} onChange={e=>{setOwner(e.target.value);setOffset(0)}}><option value="">All users</option><option value={account.id}>My activity</option>{Array.from(new Map(jobs.filter(j=>(j as any).owner_id&&(j as any).owner_id!==account.id).map(j=>[(j as any).owner_id,(j as any).owner_name])).entries()).map(([id,name])=><option key={id} value={id}>{name}</option>)}</select></label>}</div>{error&&<ErrorNotice error={error}/>}{data&&sectionRows.map(([name,items])=><section className="job-worker-group" key={name} aria-label={`${name} jobs`}><h3>{name} · {items.length}</h3>{items.map(j=><JobRow key={j.id} job={j} refresh={refresh}/>)}{!items.length&&<p className="muted">No {name.toLowerCase()} jobs{ name==='Completed'?' on this page':''}.</p>}</section>)}{!data&&!error&&<p>Loading history…</p>}{data&&!data.total&&!data.active?.length&&<p>No jobs match these filters.</p>}{data?.total>0&&<div className="actions"><button disabled={!offset} onClick={()=>setOffset(Math.max(0,offset-50))}>Previous</button><span>{offset+1}–{Math.min(offset+50,data.total)} of {data.total} completed</span><button disabled={offset+50>=data.total} onClick={()=>setOffset(offset+50)}>Next</button></div>}</section>
+ return <section className="panel"><div className="panel-head"><h2>Job history</h2><div className="actions"><button disabled={!alerts.length} onClick={()=>{markJobsReviewed(alerts);setNotice('Previous job alerts cleared. Saved job history and logs are still available.')}}>Clear job alerts</button><button disabled={stopping||!pending} onClick={stopPending}>{stopping?'Stopping…':'Stop Pending Jobs'}</button></div></div>{notice&&<p className="success-notice" role="status">{notice}</p>}<div className="job-history-filters"><label>Worker<select value={worker} onChange={e=>{setWorker(e.target.value);setOffset(0)}}><option value="">All workers</option>{["playlist","health","metadata","library","downloads","lookup","maintenance"].map(v=><option key={v} value={v}>{v[0].toUpperCase()+v.slice(1)}</option>)}</select></label>{account?.admin&&<label>Show activity<select value={owner} onChange={e=>{setOwner(e.target.value);setOffset(0)}}><option value="">All users</option><option value={account.id}>My activity</option>{Array.from(new Map(jobs.filter(j=>(j as any).owner_id&&(j as any).owner_id!==account.id).map(j=>[(j as any).owner_id,(j as any).owner_name])).entries()).map(([id,name])=><option key={id} value={id}>{name}</option>)}</select></label>}</div>{error&&<ErrorNotice error={error}/>}{data&&sectionRows.map(([name,items])=><section className="job-worker-group" key={name} aria-label={`${name} jobs`}><h3>{name} · {items.length}</h3>{items.map(j=><JobRow key={j.id} job={j} refresh={refresh}/>)}{!items.length&&<p className="muted">No {name.toLowerCase()} jobs{ name==='Completed'?' on this page':''}.</p>}</section>)}{!data&&!error&&<p>Loading history…</p>}{data&&!data.total&&!data.active?.length&&<p>No jobs match these filters.</p>}{data?.total>0&&<div className="actions"><button disabled={!offset} onClick={()=>setOffset(Math.max(0,offset-50))}>Previous</button><span>{offset+1}–{Math.min(offset+50,data.total)} of {data.total} completed</span><button disabled={offset+50>=data.total} onClick={()=>setOffset(offset+50)}>Next</button></div>}</section>
 }
 export function JobRow({job}:{job:Job;refresh?:()=>Promise<void>}){
  const payload=job.payload||{}
