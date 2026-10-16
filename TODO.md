@@ -11,5 +11,5 @@
 - [x] **Activity-only refresh feedback and responsive reads.** Remove page-shifting banners, compact job polling/history, reuse saved matching links and avoid unrelated scoring on strong identity matches. Implemented in build 102.
 
 
-- [ ] **Sidebar failure wording.** Distinguish unreviewed historical job failures from currently actionable problems; link directly to the relevant job.
+- [x] **Sidebar failure wording.** Describe previous failures, interruptions and partial completion explicitly; link directly to the relevant job and acknowledge only loaded, expanded details. Implemented in build 104.
 - [ ] **Deployment validation.** Confirm current foreground latency and live Plex playlist behavior on the deployment; scan the exact new runtime image after Docker authentication or source push.

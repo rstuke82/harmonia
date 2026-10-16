@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.0.104 · Beta — 2026-10-16
+
+- Describe unreviewed historical job failures, interruptions and partial completions explicitly in navigation.
+- Open the relevant job directly and mark only successfully loaded, expanded job details reviewed; keep review state account-scoped.
+- Keep active jobs first, queued-only badge counts, and background preparation failures in Activity.
+
 ## 1.0.0.103 · Beta — 2026-10-16
 
 - Add job runtime budgets and visible stopping status while preserving safe Plex writes and recovery.

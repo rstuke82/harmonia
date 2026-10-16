@@ -1,3 +1,4 @@
+import {markJobReviewed} from './jobReview'
 import {currentJobLanes} from './jobActivity'
 import ErrorNotice from './ErrorNotice'
 import {LidarrRequestStatus} from './LidarrRequests'
@@ -109,6 +110,7 @@ export default function Activity({jobs,jobId=''}:{jobs:Job[];jobId?:string}){
  },[id,open])
  useEffect(()=>{if(!open&&listed)setDetail(listed)},[listed,open])
  useEffect(()=>{if(!job||!activeJob(job))return;const timer=setInterval(()=>setClock(Date.now()),1000);return()=>clearInterval(timer)},[job?.id,job?.status])
+ useEffect(()=>{if(open&&!error&&detail?.id===id&&!activeJob(detail)&&jobNeedsAttention(detail))markJobReviewed(detail)},[id,open,error,detail?.id,detail?.status,detail?.finished_at,detail?.result?.partial_success])
  if(!id)return <section className="panel idle-activity"><Icon name="activity"/><h2>No active jobs</h2><p className="muted">Recent jobs and their saved output are below.</p></section>
  if(!job)return <section className="panel"><p>{error||'Opening activity…'}</p><button onClick={()=>{location.hash='activity';setId('')}}>Dismiss</button></section>
  const active=activeJob(job)
