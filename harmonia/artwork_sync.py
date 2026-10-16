@@ -1,7 +1,7 @@
 """Plex is the artwork authority; explicit Harmonia choices are sent to Plex."""
 import hashlib
 import time
-import requests
+from . import network
 import threading
 from fastapi import HTTPException
 
@@ -61,25 +61,25 @@ def apply(config,target,ident,kind,url,provider):
         except Exception as exc:raise HTTPException(422,'The artwork source did not return a valid image.') from exc
         endpoint='arts' if kind=='hero' else 'posters'
         resource_url=client.base_url+'/library/metadata/'+rating+'/'+endpoint
-        before=requests.get(resource_url,headers=client.headers,timeout=(5,20), allow_redirects=False);before.raise_for_status()
+        before=network.get(resource_url,headers=client.headers,timeout=(5,20), allow_redirects=False);before.raise_for_status()
         existing={str(r.get('ratingKey') or '') for r in before.json().get('MediaContainer',{}).get('Metadata',[])}
-        response=requests.post(resource_url,headers={**client.headers,'Content-Type':image.headers.get('Content-Type','image/jpeg')},data=image.content,timeout=(5,30), allow_redirects=False);response.raise_for_status()
-        after=requests.get(resource_url,headers=client.headers,timeout=(5,20), allow_redirects=False);after.raise_for_status()
+        response=network.post(resource_url,headers={**client.headers,'Content-Type':image.headers.get('Content-Type','image/jpeg')},data=image.content,timeout=(5,30), allow_redirects=False);response.raise_for_status()
+        after=network.get(resource_url,headers=client.headers,timeout=(5,20), allow_redirects=False);after.raise_for_status()
         resources=after.json().get('MediaContainer',{}).get('Metadata',[])
         uploaded=[r for r in resources if r.get('ratingKey') and str(r['ratingKey']) not in existing]
         if len(uploaded)!=1:
             raise HTTPException(502,'Plex accepted the upload but the new image could not be identified. Refresh and retry the artwork choice.')
-        selected=requests.put(resource_url[:-1],headers=client.headers,params={'url':uploaded[0]['ratingKey']},timeout=(5,20), allow_redirects=False);selected.raise_for_status()
-        confirmed=requests.get(resource_url,headers=client.headers,timeout=(5,20), allow_redirects=False);confirmed.raise_for_status()
+        selected=network.put(resource_url[:-1],headers=client.headers,params={'url':uploaded[0]['ratingKey']},timeout=(5,20), allow_redirects=False);selected.raise_for_status()
+        confirmed=network.get(resource_url,headers=client.headers,timeout=(5,20), allow_redirects=False);confirmed.raise_for_status()
         if not any(str(r.get('ratingKey'))==str(uploaded[0]['ratingKey']) and str(r.get('selected')).lower() in ('1','true') for r in confirmed.json().get('MediaContainer',{}).get('Metadata',[])):
             raise HTTPException(502,'Plex did not retain the selected image. Refresh and retry the artwork choice.')
-        response=requests.get(client.base_url+'/library/metadata/'+rating,headers=client.headers,timeout=(5,20), allow_redirects=False);response.raise_for_status()
+        response=network.get(client.base_url+'/library/metadata/'+rating,headers=client.headers,timeout=(5,20), allow_redirects=False);response.raise_for_status()
         items=response.json().get('MediaContainer',{}).get('Metadata',[])
         metadata=next((item for item in items if str(item.get('ratingKey'))==rating),None)
         field='art' if kind=='hero' else 'thumb'
         if not metadata or not str(metadata.get(field) or '').startswith('/'):
             raise HTTPException(502,'Plex accepted the upload but its current artwork could not be verified. Retry the artwork choice.')
-    except (requests.RequestException,ValueError,TypeError) as exc:raise HTTPException(502,'Plex artwork could not be updated. Your Harmonia artwork choice was not changed; retry after checking Plex.') from exc
+    except (network.RequestException,ValueError,TypeError) as exc:raise HTTPException(502,'Plex artwork could not be updated. Your Harmonia artwork choice was not changed; retry after checking Plex.') from exc
     # Merge only current image paths into each visible account inventory. Never
     # replace a fetched whole snapshot, or expand a member's Plex visibility.
     from .accounts import root_repository,member_stores
@@ -109,7 +109,6 @@ def apply(config,target,ident,kind,url,provider):
 
 def pending(config):
     from .accounts import root_repository
-    from .lidarr import state_put
     repo=root_repository();results=[]
     for key,value in repo.load('artwork_overrides').items():
         if value.get('sync_status')!='pending':continue

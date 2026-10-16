@@ -3,15 +3,15 @@ import threading
 import time
 from urllib.parse import urlsplit
 
-import requests
-
+from . import network
+from requests import Session
 from . import __version__
 
 PUBLIC_BASE = 'https://musicbrainz.org'
 USER_AGENT = f'Harmonia/{__version__} (https://github.com/rstuke82/harmonia)'
 _public_lock = threading.Lock()
 _public_last = 0.0
-_session = requests.Session()
+_session = Session()
 
 
 def _routed(data, source, base, reason=''):
@@ -31,10 +31,10 @@ def probe_capabilities(base, release_group_id):
     probes += [('search_'+entity,entity,{'query':'test','limit':1}) for entity in ('artist','recording','release','release-group')]
     for name,entity,params in probes:
         try:
-            response=_session.get(base+'/ws/2/'+entity,params={'fmt':'json',**params},headers={'User-Agent':USER_AGENT},timeout=(3,10))
+            response=network.get(base+'/ws/2/'+entity,params={'fmt':'json',**params},headers={'User-Agent':USER_AGENT},timeout=(3,10), _session=_session, _service='MusicBrainz')
             if response.status_code < 400:
                 response.json();found.append(name)
-        except (requests.RequestException,ValueError):pass
+        except (network.RequestException,ValueError):pass
     return found
 
 
@@ -58,9 +58,9 @@ def _request(base, entity, params, public, timeout):
             checkpoint()
             _public_last = time.monotonic()
     try:
-        response = _session.get(base.rstrip('/') + '/ws/2/' + entity.lstrip('/'),
+        response = network.get(base.rstrip('/') + '/ws/2/' + entity.lstrip('/'),
                                 params={'fmt':'json', **(params or {})},
-                                headers={'User-Agent':USER_AGENT}, timeout=timeout)
+                                headers={'User-Agent':USER_AGENT}, timeout=timeout, _session=_session, _service="MusicBrainz")
     finally:
         checkpoint()
     response.raise_for_status()
@@ -97,9 +97,9 @@ def get(repo, entity, params=None, timeout=(5, 20)):
             _log(repo, 'MusicBrainz mirror search returned no results -> public fallback', 'WARNING')
             return _routed(_request(PUBLIC_BASE, entity, params, True, timeout),'public_fallback',PUBLIC_BASE,'mirror_empty')
         return _routed(result,'mirror',mirror)
-    except (requests.Timeout, requests.ConnectionError):
+    except (network.Timeout, network.ConnectionError):
         _log(repo, 'MusicBrainz mirror failed -> public fallback', 'WARNING')
-    except requests.HTTPError as exc:
+    except network.HTTPError as exc:
         status = exc.response.status_code if exc.response is not None else None
         if status is None or status < 500:
             raise

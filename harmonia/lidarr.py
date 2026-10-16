@@ -10,7 +10,7 @@ import uuid
 from urllib.parse import urlsplit
 from typing import Literal
 
-import requests
+from . import network
 from fastapi import HTTPException
 from pydantic import BaseModel, Field
 from . import jobs
@@ -127,15 +127,15 @@ class Client:
             target += f' [{identity}]'
         _record_log(level, 'Lidarr', f'Starting {target}')
         try:
-            response = requests.request(method, self.url + '/api/v1/' + path,
+            response = network.request(method, self.url + '/api/v1/' + path,
                 headers={'X-Api-Key': self.key, 'Accept': 'application/json'},
-                timeout=(5, 25), allow_redirects=False, **kwargs)
+                timeout=(5, 25), allow_redirects=False, _service="Lidarr", **kwargs)
             if response.status_code in (401, 403):
                 raise HTTPException(502, 'Lidarr rejected the API key. Check Settings → Lidarr.')
             if 300 <= response.status_code < 400:
                 raise HTTPException(502, 'Lidarr redirected the request. Use its final server URL, including its URL base.')
             if not response.ok:
-                detail = redact(response.text[:12000].replace(self.key, '[REDACTED]'))
+                detail = redact(response.text[:12000], secrets=(self.key,))
                 from .diagnostics import concise_error
                 _record_log('DEBUG','Lidarr',f'{target}: {detail}')
                 short=concise_error(detail)
@@ -147,12 +147,12 @@ class Client:
         except HTTPException as exc:
             _record_log('ERROR', 'Lidarr', f'{target} failed after {time.monotonic()-started:.2f}s: {exc.detail}')
             raise
-        except (requests.RequestException, ValueError) as exc:
-            exact = redact(str(exc).replace(self.key, '[REDACTED]'))
+        except (network.RequestException, ValueError) as exc:
+            exact = redact(exc, secrets=(self.key,))
             message = f'{target} failed after {time.monotonic()-started:.2f}s: {type(exc).__name__}: {exact}'
             _record_log('ERROR', 'Lidarr', message)
             suffix = 'This was a read-only request; no album was added or changed.' if method == 'GET' else 'Inspect Lidarr before retrying; it may have accepted the write.'
-            raise HTTPException(504 if isinstance(exc, requests.Timeout) else 502, message + ' ' + suffix) from None
+            raise HTTPException(504 if isinstance(exc, network.Timeout) else 502, message + ' ' + suffix) from None
 
     def options(self):
         status = self.call('GET', 'system/status')
@@ -299,7 +299,7 @@ def musicbrainz_search(repo, cfg, request, test=False, publish=None):
     try:
         from .musicbrainz_client import get as mb_get
         data = mb_get(repo, entity, {'query': query, 'limit': 25,**({'offset':request.recording_offset} if entity=='recording' and request.recording_offset else {})})
-    except (requests.RequestException, ValueError) as exc:
+    except (network.RequestException, ValueError) as exc:
         from .diagnostics import service_failure
         from .diagnostics import redact
         failure=service_failure('MusicBrainz', exc, started)
@@ -318,7 +318,7 @@ def musicbrainz_search(repo, cfg, request, test=False, publish=None):
         try:records = containing_albums(repo, records, request, preferences, mb_get,
             publish=(lambda partial:publish({'rows':search_scores(ordered(album_search_rows(partial,False),preferences),request),'provider':'MusicBrainz','cached':False})) if publish else None)
         except ValueError as exc:raise HTTPException(422,str(exc)) from None
-        except requests.RequestException as exc:
+        except network.RequestException as exc:
             from .diagnostics import service_failure
             raise service_failure('MusicBrainz',exc,started) from None
     result = album_search_rows(records,known)
@@ -373,6 +373,7 @@ def prepare(repo, request):
 
 def run_album_command(client, body, label, timeout=120, existing_id=None, accepted=None):
     from .api import _record_log
+    from .diagnostics import redact
     jobs.progress(label)
     command = client.call('GET', f'command/{existing_id}') if existing_id else client.call('POST', 'command', json=body)
     if not command or not command.get('id'):
@@ -390,7 +391,7 @@ def run_album_command(client, body, label, timeout=120, existing_id=None, accept
         if status == 'completed':
             return command_id
         if status in ('failed', 'aborted', 'cancelled', 'orphaned'):
-            detail = str(command.get('exception') or command.get('message') or status).replace(client.key if hasattr(client, 'key') else '\0', '[REDACTED]')
+            detail = redact(command.get('exception') or command.get('message') or status, secrets=(getattr(client, 'key', ''),))
             raise ValueError(f'{label}: command {command_id} {status}: {detail}')
         if time.monotonic() >= deadline:
             raise ValueError(f'{label}: command {command_id} still {status or "pending"} after {timeout}s. The album remains in Lidarr; inspect the command before retrying.')
@@ -545,7 +546,7 @@ def finish_search(repo, client, payload, album_id, added=False):
         result.update(search_requested=True,search_command_id=cid,summary=base+'; search completed (downloads are managed by Lidarr)')
     except Exception as exc:
         from .diagnostics import redact
-        detail = redact(str(getattr(exc,'detail',str(exc))).replace(getattr(client,'key','') or '\0','[REDACTED]'))
+        detail = redact(getattr(exc, 'detail', exc), secrets=(getattr(client, 'key', ''),))
         pending = isinstance(exc,TimeoutError) or (command_id and 'still ' in detail)
         unknown = submitting and not command_id and isinstance(exc,HTTPException)
         status = 'search_unknown' if unknown else 'search_pending' if pending else 'search_failed'

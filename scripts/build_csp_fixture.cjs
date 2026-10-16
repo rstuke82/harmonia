@@ -1,0 +1,14 @@
+const path=require('node:path'), fs=require('node:fs');
+const root=path.resolve(__dirname,'..'), output=process.argv[2];
+const esbuild=require(path.join(root,'web/node_modules/esbuild'));
+const source=`import React from 'react';
+import {createRoot} from 'react-dom/client';
+import Appearance,{applyTheme} from './Appearance';
+import {RecentRequestCard} from './DiscoverShelves';
+import {FilterMenu} from './Controls';
+import Modal from './Modal';
+import './styles.css';
+function Fixture(){const [open,setOpen]=React.useState(false);return <><Appearance/><RecentRequestCard row={{key:'test',title:'A longer album title to exercise measured title sizing',artist:'Artist',artwork:'/cover.svg',status:'queued',requesters:[{user_id:'1',name:'User'}]}}/><FilterMenu choices={['All statuses']} value={[]} onChange={()=>{}}/><button onClick={()=>setOpen(true)}>Open modal</button>{open&&<Modal onClose={()=>setOpen(false)}><div className="modal" role="dialog"><button onClick={()=>setOpen(false)}>Close modal</button></div></Modal>}</>};
+applyTheme();createRoot(document.getElementById('root')).render(<Fixture/>);`;
+esbuild.buildSync({stdin:{contents:source,resolveDir:path.join(root,'web/src'),sourcefile:'csp-fixture.tsx',loader:'tsx'},bundle:true,define:{'process.env.NODE_ENV':'"production"'},format:'esm',outfile:path.join(output,'fixture.js'),jsx:'automatic',nodePaths:[path.join(root,'web/node_modules')],loader:{'.png':'dataurl','.woff2':'dataurl'}});
+fs.writeFileSync(path.join(output,'index.html'),'<!doctype html><html><head><link rel="stylesheet" href="/fixture.css"></head><body><div id="root"></div><script type="module" src="/fixture.js"></script></body></html>');

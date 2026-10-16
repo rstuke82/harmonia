@@ -2,14 +2,20 @@
 import hashlib
 import json
 import threading
+import weakref
 from collections import OrderedDict
 
 _cache=OrderedDict()
 _lock=threading.RLock()
+_loading=weakref.WeakValueDictionary()
+_epoch=0
 
 
 def clear():
-    with _lock:_cache.clear()
+    global _epoch
+    with _lock:
+        _cache.clear()
+        _epoch+=1
 
 
 def indexed(config):
@@ -27,6 +33,14 @@ def indexed(config):
         entry=_cache.get(key)
         if entry and entry[0]==stamp:
             _cache.move_to_end(key);return entry[1]
+        loading=_loading.setdefault(key,threading.Lock())
+    # Unrelated accounts must not wait for this inventory to decode/index.
+    with loading:
+        stamp=(revision(repo,{'inventory','library_artist_links','plex_album_links'}),revision(root,{'inventory','library_artist_links','plex_album_links'}))
+        with _lock:
+            entry=_cache.get(key);epoch=_epoch
+            if entry and entry[0]==stamp:
+                _cache.move_to_end(key);return entry[1]
         plex,lidarr=current(repo,config)
         by_album={};by_artist={};by_name={};by_identity={};ambiguous_names=set();ambiguous_albums=set()
         for row in plex.get('rows',[]):
@@ -48,6 +62,8 @@ def indexed(config):
         data={'plex':plex,'lidarr':lidarr,'playable_tracks':{str(p['plex_id']):p for p in plex.get('rows',[])},'plex_albums':by_album,'plex_artists':by_artist,'plex_artist_names':by_name,'plex_album_names':by_identity,
               'albums':{str(a.get('album_id')):a for a in lidarr.get('rows',[])},'artists':{str(a.get('id')):a for a in lidarr.get('artists',[])},
               'artist_links':root.load('library_artist_links'),'album_links':root.load_one('plex_album_links',scope,{})}
-        _cache[key]=(stamp,data);_cache.move_to_end(key)
-        while len(_cache)>4:_cache.popitem(last=False)
+        with _lock:
+            if epoch==_epoch:
+                _cache[key]=(stamp,data);_cache.move_to_end(key)
+                while len(_cache)>4:_cache.popitem(last=False)
         return data

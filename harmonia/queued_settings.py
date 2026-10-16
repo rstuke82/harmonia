@@ -44,10 +44,10 @@ def execute():
                 name=p.get('source_name') if value.get('restore_source_name') else value['name']
                 if not name:raise ValueError('Refresh or sync this playlist first to load its source name.')
                 from .api import _health_plex
-                import requests
+                from . import network
                 plex=_health_plex(config)
                 jobs.progress('Renaming playlist: '+name)
-                response=requests.put(f"{plex.base_url}/playlists/{p['plex_playlist_id']}",headers=plex.headers,params={'title':name},timeout=20)
+                response=network.put(f"{plex.base_url}/playlists/{p['plex_playlist_id']}",headers=plex.headers,params={'title':name},timeout=20)
                 response.raise_for_status()
                 p.setdefault('source_name',p.get('plex_playlist_name',''))
                 p['plex_playlist_name']=name

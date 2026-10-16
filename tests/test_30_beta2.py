@@ -147,7 +147,7 @@ class Beta2(MultiUser):
             c=Config();c.config['playlists']=[{'source':'spotify','source_id':'one','plex_playlist_id':'123','last_synced':'2026-09-25T10:00:00+00:00'}];c.save()
             description='Source text'+MARKER+'Last successful sync: Sep 25, 2026 at 5:00 AM CDT\nTracks: 25 source · 25 matched'
             response=MagicMock();response.json.return_value={'MediaContainer':{'Metadata':[{'summary':description}]}}
-            with patch.object(api,'_health_plex',return_value=MagicMock()),patch('harmonia.description_refresh.requests.get',return_value=response),patch('harmonia.description_refresh.requests.put') as write:
+            with patch.object(api,'_health_plex',return_value=MagicMock()),patch('harmonia.description_refresh.network.get',return_value=response),patch('harmonia.description_refresh.network.put') as write:
                 execute({'playlist_keys':['spotify:one']})
             summary=write.call_args.kwargs['params']['summary'];self.assertIn('Next scheduled sync:',summary);self.assertIn('Last successful sync: Sep 25, 2026 at 5:00 AM CDT',summary);self.assertIn('25 matched',summary)
             self.assertEqual(Config().config['playlists'][0]['last_synced'],'2026-09-25T10:00:00+00:00')

@@ -5,7 +5,7 @@ from typing import Optional
 from typing import Tuple
 import json
 import re
-from . import network as requests
+from . import network
 from .track_duration import source_duration
 from html import unescape
 from urllib.parse import urlparse
@@ -421,7 +421,8 @@ class AppleMusicAPI:
                 or ""
             )
 
-        credit_names=[v.strip() for v in re.split(r'\s*(?:,|&|\bfeat(?:uring)?\.?\b|\bft\.?\b|\bx\b)\s*',artist,flags=re.I) if v.strip()]
+        from .artist_credits import names
+        credit_names=names(artist)
         return {
             "title": repair_text(title).strip(),
             "artist": repair_text(artist).strip(),
@@ -488,8 +489,8 @@ class AppleMusicAPI:
 
         # Fallback for future layout changes: scan all dictionaries while
         # retaining traversal order.
-            for obj in cls._walk_json(data):
-                add_track(obj)
+        for obj in cls._walk_json(data):
+            add_track(obj)
 
         return tracks
 
@@ -598,7 +599,7 @@ class AppleMusicAPI:
 
         try:
             resp = apple_playlist_get(
-                requests, url,
+                network, url,
                 headers=headers,
                 timeout=15,
             )
@@ -679,11 +680,11 @@ class AppleMusicAPI:
 
             return tracks, metadata
 
-        except requests.exceptions.Timeout:
+        except network.exceptions.Timeout:
             raise Exception(
                 "Request timed out. Apple Music is not responding."
             )
-        except requests.exceptions.RequestException as e:
+        except network.exceptions.RequestException as e:
             raise Exception(
                 f"Apple Music connection error: {e}"
             )

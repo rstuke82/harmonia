@@ -40,11 +40,11 @@ def canonical_playlist(value, source=None):
     raise ValueError('Enter a valid Spotify or Apple Music playlist URL')
 
 
-def apple_playlist_get(requests, url, **kwargs):
+def apple_playlist_get(network, url, **kwargs):
     """Validate every redirect before issuing it, with a bounded chain."""
     for attempt in range(6):
         trusted_https_url(url, APPLE_HOSTS)
-        response = requests.get(url, allow_redirects=False, **kwargs)
+        response = network.get(url, allow_redirects=False, **kwargs)
         if response.status_code not in (301, 302, 303, 307, 308):
             return response
         location = response.headers.get('Location')

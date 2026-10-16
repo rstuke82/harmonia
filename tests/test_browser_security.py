@@ -38,6 +38,15 @@ class BrowserHardening(unittest.TestCase):
         self.assertEqual(headers[b'cache-control'],b'public, max-age=100');self.assertNotIn(b'strict-transport-security',headers)
         self.assertEqual(asyncio.run(call(app,scheme='https'))[1][b'strict-transport-security'],b'max-age=31536000')
         self.assertIn("script-src 'self'",CSP);self.assertIn("frame-ancestors 'none'",CSP);self.assertIn('frame-src https://embed.music.apple.com',CSP)
+    def test_csp_blocks_inline_styles_and_external_http_images(self):
+        directives=dict(part.strip().split(' ',1) for part in CSP.split(';'))
+        self.assertEqual(directives['style-src'], "'self'")
+        self.assertEqual(directives['style-src-elem'], "'self'")
+        self.assertEqual(directives['style-src-attr'], "'none'")
+        self.assertNotIn('http:', directives['img-src'].split())
+        self.assertIn("'self'", directives['img-src'].split())
+        self.assertIn('https:', directives['img-src'].split())
+
     def test_https_only_rejects_spoofed_forwarding_but_accepts_trusted_proxy(self):
         with patch.dict(os.environ,{'HARMONIA_HTTPS_ONLY':'true','HARMONIA_TRUSTED_PROXIES':'10.0.0.2'}):
             app=ProxyHeadersMiddleware(BrowserSecurity(self.target),trusted_hosts=trusted_proxies())

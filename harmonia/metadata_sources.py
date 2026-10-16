@@ -96,7 +96,6 @@ def register(app):
     @app.get('/api/settings/metadata-sources')
     def get_settings():
         admin();repo=root_repository();lastfm=repo.load('lastfm').get('settings',{})
-        from .lidarr import config as lidarr_config
         value=settings(repo)
         for field in SOURCE_DEFAULTS:
             if not value['source_order'].get(field):value['source_order'][field]=order(value,field)

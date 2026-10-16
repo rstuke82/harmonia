@@ -3,7 +3,7 @@ from typing import List
 from typing import Tuple
 import json
 import re
-from . import network as requests
+from . import network
 from .track_duration import source_duration
 from html import unescape
 from urllib.parse import urlparse
@@ -162,7 +162,7 @@ class SpotifyAPI:
         )
 
         try:
-            resp = requests.get(
+            resp = network.get(
                 "https://open.spotify.com/oembed",
                 params={"url": public_url},
                 headers={
@@ -188,7 +188,7 @@ class SpotifyAPI:
                 data.get("thumbnail_url", "")
             )
 
-        except requests.RequestException:
+        except network.RequestException:
             return ""
 
 
@@ -233,7 +233,7 @@ class SpotifyAPI:
         }
 
         try:
-            resp = requests.get(embed_url, headers=headers, timeout=10)
+            resp = network.get(embed_url, headers=headers, timeout=10)
             if resp.status_code != 200:
                 raise Exception(
                     f"Failed to fetch Spotify playlist: {resp.status_code}"
@@ -286,7 +286,7 @@ class SpotifyAPI:
                     # even when the embed widget does not.
                     if not image_url:
                         try:
-                            public_resp = requests.get(
+                            public_resp = network.get(
                                 public_url,
                                 headers=headers,
                                 timeout=10,
@@ -295,7 +295,7 @@ class SpotifyAPI:
                                 image_url = self._extract_artwork_url(
                                     public_resp.text
                                 )
-                        except requests.RequestException:
+                        except network.RequestException:
                             pass
 
                     if image_url:
@@ -393,11 +393,11 @@ class SpotifyAPI:
                 "complete": isinstance(expected,int) and len(track_list)>=expected,
             }
 
-        except requests.exceptions.Timeout:
+        except network.exceptions.Timeout:
             raise Exception(
                 "Request timed out. Spotify is tarpitting the connection."
             )
-        except requests.exceptions.RequestException as e:
+        except network.exceptions.RequestException as e:
             raise Exception(f"Connection error: {e}")
         except json.JSONDecodeError as e:
             raise Exception(f"Failed to parse playlist JSON: {e}")

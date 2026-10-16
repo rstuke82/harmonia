@@ -10,7 +10,7 @@ class Preferences(BaseModel):
     cache_minutes: Literal[5,15,30,60] = 15
 
 def preferences(repo):
-    from .accounts import actor, root_repository
+    from .accounts import root_repository
     repo=root_repository()
     return Preferences(**repo.load('availability_settings').get('preferences',{}))
 
@@ -20,7 +20,6 @@ def execute(payload):
     from .sync_engine import Syncer
     from .matching import Matcher
     from .lidarr import config as lidarr_config
-    from .lidarr_downloads import snapshot
     from .library_cache import reuse
     started=time.monotonic();repo=job_store().repository;prefs=preferences(repo)
     warnings=[];matches={};affected=set();decisions={};checked=0

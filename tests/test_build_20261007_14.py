@@ -93,7 +93,7 @@ class AlbumReads(unittest.TestCase):
     def test_image_index_reuse_and_revision_invalidation(self):
         response=SimpleNamespace(status_code=200,content=b'cover',headers={'Content-Type':'image/jpeg'},raise_for_status=lambda:None,iter_content=lambda **kw:iter([b'cover']),close=lambda:None)
         client=SimpleNamespace(base_url='http://plex',headers={},music_library_key='1')
-        with accounts.as_user(self.user),patch('harmonia.api._health_plex',return_value=client),patch('requests.get',return_value=response),patch('harmonia.track_bridge.links',side_effect=AssertionError('Images must not rebuild track links')):
+        with accounts.as_user(self.user),patch('harmonia.api._health_plex',return_value=client),patch('harmonia.network.get',return_value=response),patch('harmonia.track_bridge.links',side_effect=AssertionError('Images must not rebuild track links')):
             self.images('pal');self.images('pal')
             self.assertEqual(self.current.call_count,1)
             self.repo.save({'inventory':{'fixture':{'changed':True}}})

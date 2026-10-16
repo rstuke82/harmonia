@@ -145,7 +145,7 @@ For timely import updates, configure Lidarr's webhook using the endpoint and aut
 
 ## Configuration and storage
 
-Configure Plex, Lidarr, Last.fm, matching preferences, users, and scheduled tasks through the web interface. Connection credentials belong in Harmonia Settings, not in a public Compose file.
+Configure Plex, Lidarr, Last.fm, matching preferences, users, and scheduled tasks through the web interface. Update notifications can be disabled in Settings → About. Connection credentials belong in Harmonia Settings, not in a public Compose file.
 
 | Setting | Purpose |
 | --- | --- |

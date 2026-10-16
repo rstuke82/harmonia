@@ -33,7 +33,7 @@ Configure the TLS listener/certificate separately. If there are multiple proxy h
 
 ## Browser response policy
 
-The application supplies an enforced CSP with same-origin scripts/connections, no plugins or framing, and Apple Music preview framing explicitly allowed. Inline styles remain allowed for React component styling. External image/audio origins remain allowed for existing artwork and previews; this is not a strict media-origin allowlist.
+The application supplies an enforced CSP with same-origin scripts/connections, no plugins or framing, and Apple Music preview framing explicitly allowed. Inline stylesheet blocks and style attributes are blocked. Trusted same-origin JavaScript sets individual style properties for themes, artwork, fitted titles and menus. Images may load from Harmonia itself, data/blob URLs and HTTPS; external HTTP images are blocked. Audio origins remain allowed for existing previews, so this is not a strict media-origin allowlist.
 
 Responses have nosniff, DENY framing, referrer and camera/microphone/geolocation restrictions. HTTPS responses have one-year HSTS for this host, without includeSubDomains or preload. HTTP responses do not establish HSTS. API responses (including authentication errors and backup downloads) and responses setting cookies are no-store. Existing hashed static asset caching remains intact. Public Swagger/ReDoc/OpenAPI routes are disabled.
 
@@ -81,3 +81,17 @@ Docker installs requirements.lock, resolved from the tested Python 3.12 runtime;
 The included .github/workflows/security.yml builds/tests/scans the actual image on native AMD64 and ARM64 runners. It uses an immutable checkout commit and pinned Docker Scout image. Configure limited Docker Scout credentials in repository secrets if the scanner requires them; missing scanner access is a failed check, not a clean scan. Critical/high advisories fail the check, including unfixed findings. Repository secrets DOCKER_SCOUT_HUB_USER and DOCKER_SCOUT_HUB_PASSWORD are required for the Docker Scout step.
 
 Maintain the lock in an isolated Python 3.12 environment, review changed packages and base/scanner digests, and rerun backend/frontend validation plus both runtime image scans before publication. Pinning improves repeatability; it does not freeze security knowledge or guarantee bit-identical wheel contents without artifact hashes. Review scanner results rather than equating every package finding with a remotely exploitable application defect.
+
+## Notification destinations and development checks
+
+Notification settings accept public HTTPS webhook URLs without embedded credentials or fragments. Redirects are not followed; configure the final destination. Explicit `allow_private: true` permits local/private notification services, including HTTP on private addresses. Link-local, reserved, multicast and unspecified destinations remain blocked. Every send resolves and validates the destination again, pins the connection address, disables environment proxies, and keeps TLS certificate verification enabled. Test delivery errors do not reveal raw request URLs or upstream response bodies.
+
+The default observed HTTP timeout is 5 seconds to connect and 30 seconds to read; explicit service timeouts remain in effect. These are request timeouts, not whole-job runtime limits.
+
+Update checks can be disabled in Settings → About. Disabled checks make no new registry requests and are not queued by the recurring scheduler. Already running requests may finish.
+
+Development-only checks use requirements-dev.txt. Run `python scripts/lint.py` after installing those dependencies. CI fails on new lint findings compared with lint-baseline.json and checks formatting of the maintained modules listed in the script. Existing lint findings remain a tracked cleanup backlog; the baseline is not a claim that the whole codebase is lint-clean. Update it only after reviewing intentional changes. The runtime image does not install development tools.
+
+Repository initialization repairs credential-store permissions. Routine connections check only SQLite database/WAL/SHM files, reject symlinks and hard links, and change file modes only when necessary. The cache retains at most 128 repository instances; account data still uses fresh connections and separate directories.
+
+CI also exercises real React components in headless Chromium under the production CSP, covering themes, artwork, fitted titles, menus and modals. Deliberately injected inline styles and external HTTP images must be blocked.

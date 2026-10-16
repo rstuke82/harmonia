@@ -1,5 +1,7 @@
 """Read-only comparison of the last successful server inventories."""
 import hashlib
+import json
+import weakref
 import threading
 import time
 from collections import OrderedDict
@@ -11,13 +13,14 @@ from .album_apple_artwork import artwork as apple_album_artwork
 
 
 _view_cache=OrderedDict()
-_view_loading={}
+_view_loading=weakref.WeakValueDictionary()
+_view_epoch=0
 _view_lock=threading.Lock()
 _VIEW_NAMESPACES={
     'library_views_epoch','library_album_apple_artwork','inventory','local_artist_enrichment','library_artist_catalog',
     'metadata_sources','artwork_overrides','fanart_cache','file_audit','file_issue_reviews',
     'library_artist_metadata','library_lastfm_artist_metadata','library_artist_links',
-    'library_album_service_links','musicbrainz_settings','blocked_albums','blocked_artists','file_tools','track_links','plex_album_links','fanart','lidarr','accounts','runtime',
+    'library_album_service_links','musicbrainz_settings','blocked_albums','blocked_artists','file_tools','track_links','plex_album_links','fanart','lidarr',
 }
 
 
@@ -28,7 +31,10 @@ def _revision(repo):
 
 def invalidate():
     """Drop prepared Library views after inventory or metadata mutations."""
-    with _view_lock:_view_cache.clear()
+    global _view_epoch
+    with _view_lock:
+        _view_cache.clear()
+        _view_epoch+=1
     from .library_inventory import clear
     clear()
 
@@ -348,27 +354,33 @@ def cached_library(refresh=False):
     from .accounts import actor
     from .api import _config
     from .accounts import root_repository
-    user=actor() or {};repo=_config(read_only=True,namespaces=[]).repository;root=root_repository()
-    key=(str(repo.directory),str(root.directory),str(user.get('id') or 'server'),bool(user.get('admin')),bool(user.get('can_library_issues')))
+    user=actor() or {};config=_config(read_only=True,namespaces=[]);repo=config.repository;root=root_repository()
+    credentials=hashlib.sha256(json.dumps(getattr(config,'config',{}).get('plex',{}),sort_keys=True).encode()).hexdigest()
+    key=(str(repo.directory),str(root.directory),str(user.get('id') or 'server'),bool(user.get('admin')),bool(user.get('can_library_issues')),credentials)
     revision=(_revision(repo),_revision(root))
     with _view_lock:
-        entry=_view_cache.get(key);loading=_view_loading.setdefault(key,threading.Lock())
-    if not refresh and entry and entry['revision']==revision:
-        return entry['data']
-    with loading:
-        with _view_lock:entry=_view_cache.get(key)
+        entry=_view_cache.get(key)
         if not refresh and entry and entry['revision']==revision:
-            return entry['data']
+            _view_cache.move_to_end(key);return entry['data']
+        loading=_view_loading.setdefault(key,threading.Lock())
+    with loading:
+        revision=(_revision(repo),_revision(root))
+        with _view_lock:
+            entry=_view_cache.get(key)
+            epoch=_view_epoch
+            if not refresh and entry and entry['revision']==revision:
+                _view_cache.move_to_end(key);return entry['data']
         data=build_library()
         with _view_lock:
-            _view_cache[key]={'revision':revision,'at':time.monotonic(),'data':data};_view_cache.move_to_end(key)
-            while len(_view_cache)>4:_view_cache.popitem(last=False)
+            if epoch==_view_epoch:
+                _view_cache[key]={'revision':revision,'at':time.monotonic(),'data':data};_view_cache.move_to_end(key)
+                while len(_view_cache)>4:_view_cache.popitem(last=False)
         return data
 
 
-def link_targets():
+def link_targets(model=None):
     """Library's unified saved album records, with its current artwork and tracks."""
-    model=cached_library()
+    if model is None:model=cached_library()
     records=model['_rows_by_album']
     result={}
     for ident,row in records.items():
@@ -408,9 +420,8 @@ def register(app):
     from .file_tools import register as register_tools
     register_tools(app)
     from .api import _config,job_store
-    from .inventory import current
     from .accounts import actor,root_repository
-    from .track_bridge import context,identity
+    from .track_bridge import identity
     from pydantic import BaseModel,Field
     @app.get('/api/library')
     @saved('library directory v17',LIBRARY)
@@ -811,8 +822,6 @@ def register(app):
         choices=artwork_candidates(target,target_id,kind)
         selected=next((r for r in choices['candidates'] if r['url']==body.url and r['provider']==body.provider and not r.get('stale')),None)
         if not selected:raise HTTPException(409,'That image is no longer available. Refresh the artwork choices.')
-        from .accounts import root_repository
-        from .lidarr import state_put
         from .artwork_sync import choose
         sync=choose(_config(read_only=True,namespaces=[]),target,target_id,kind,body.url,body.provider)
         return {**artwork_candidates(target,target_id,kind),'sync':sync}
@@ -840,7 +849,6 @@ def register(app):
         config,plex,lidarr,ctx=read()
         t=next((t for t in ctx['tracks'] if str(t['id'])==track_id),None)
         if not t or not t.get('file') or not ctx.get('scope'):raise HTTPException(409,'Import this track into Lidarr and run a current library scan before linking it.')
-        from .lidarr import state_put
         import json
         from .accounts import root_repository
         with root_repository().connect() as db:

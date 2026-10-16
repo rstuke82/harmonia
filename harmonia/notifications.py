@@ -1,17 +1,18 @@
-"""Generic webhook notification support for Harmonia 2.0."""
+"""Generic webhook notification support for Harmonia."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any, Dict, Optional
 
-import requests
+from . import webhook_transport
 
 
 @dataclass
 class WebhookSettings:
     enabled: bool = False
     url: str = ""
+    allow_private: bool = False
     notify_sync_failures: bool = True
     notify_lost_matches: bool = True
     notify_unresolved: bool = True
@@ -22,23 +23,11 @@ class WebhookSettings:
     @classmethod
     def from_dict(cls, value: Optional[dict]) -> "WebhookSettings":
         value = value if isinstance(value, dict) else {}
-        allowed = {
-            field_name
-            for field_name in cls.__dataclass_fields__
-        }
-        return cls(
-            **{
-                key: value[key]
-                for key in allowed
-                if key in value
-            }
-        )
+        allowed = {field_name for field_name in cls.__dataclass_fields__}
+        return cls(**{key: value[key] for key in allowed if key in value})
 
     def to_dict(self) -> Dict[str, Any]:
-        return {
-            field_name: getattr(self, field_name)
-            for field_name in self.__dataclass_fields__
-        }
+        return {field_name: getattr(self, field_name) for field_name in self.__dataclass_fields__}
 
 
 class WebhookNotifier:
@@ -56,15 +45,14 @@ class WebhookNotifier:
         if not self.settings.enabled or not self.settings.url:
             return False
 
-        response = requests.post(
+        webhook_transport.post(
             self.settings.url,
-            json={
+            {
                 "application": "Harmonia",
                 "event": event,
                 "message": message,
                 "data": data or {},
             },
-            timeout=15,
+            allow_private=self.settings.allow_private,
         )
-        response.raise_for_status()
         return True

@@ -2,7 +2,7 @@
 import threading
 import time
 from urllib.parse import urlsplit
-import requests
+from . import network
 from fastapi import HTTPException
 from pydantic import BaseModel, Field
 
@@ -29,12 +29,12 @@ def lookup(request):
         from .api import _record_log
         _record_log("INFO", "Apple preview", f"Searching Apple catalog: {request.title} — {request.artist}")
         try:
-            response = requests.get('https://itunes.apple.com/search', params={
+            response = network.get('https://itunes.apple.com/search', params={
                 'term': request.title + ' ' + request.artist, 'entity': 'song',
                 'media': 'music', 'limit': 12, 'country': request.country}, timeout=(5, 15))
             response.raise_for_status()
             data = response.json()
-        except (requests.RequestException, ValueError) as exc:
+        except (network.RequestException, ValueError) as exc:
             from .diagnostics import service_failure
             failure=service_failure('Apple catalog', exc, started)
             _record_log('ERROR','Apple preview',failure.detail)

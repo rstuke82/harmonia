@@ -1,3 +1,4 @@
+from harmonia import redirect_policy
 import asyncio
 import hashlib
 import json
@@ -115,12 +116,12 @@ class BoundedImages(unittest.TestCase):
     def response(self,chunks,headers=None):return Mock(headers=headers or {'Content-Type':'image/png'},iter_content=lambda **kw:iter(chunks))
     def test_streamed_image_never_reads_unbounded_content(self):
         response=self.response([b'12',b'34']);type(response).content=PropertyMock(side_effect=AssertionError('buffered content accessed'))
-        with patch.object(image_download.requests,'get',return_value=response) as get:
+        with patch.object(redirect_policy.network,'get',return_value=response) as get:
             image=image_download.download('https://image',max_bytes=4)
         self.assertEqual(image.content,b'1234');self.assertTrue(get.call_args.kwargs['stream']);response.close.assert_called_once()
     def test_oversized_header_rejected_before_body(self):
         response=self.response([]);response.headers['Content-Length']='100';response.iter_content=Mock(side_effect=AssertionError('body read'))
-        with patch.object(image_download.requests,'get',return_value=response):
+        with patch.object(redirect_policy.network,'get',return_value=response):
             with self.assertRaises(HTTPException) as error:image_download.download('https://image',max_bytes=4)
         self.assertEqual(error.exception.status_code,413);response.iter_content.assert_not_called();response.close.assert_called_once()
     def test_actual_decoded_byte_limit_stops_reading_and_closes(self):
@@ -128,12 +129,12 @@ class BoundedImages(unittest.TestCase):
         def chunks(**kw):
             for chunk in (b'12',b'34',b'56',b'never'):seen.append(chunk);yield chunk
         response=self.response([]);response.iter_content=chunks
-        with patch.object(image_download.requests,'get',return_value=response):
+        with patch.object(redirect_policy.network,'get',return_value=response):
             with self.assertRaises(HTTPException) as error:image_download.download('https://image',max_bytes=4,oversized_status=502)
         self.assertEqual(error.exception.status_code,502);self.assertEqual(seen,[b'12',b'34',b'56']);response.close.assert_called_once()
     def test_network_failure_releases_slot(self):
         slots=threading.BoundedSemaphore(1)
-        with patch.object(image_download,'_downloads',slots),patch.object(image_download.requests,'get',side_effect=requests.ConnectionError('offline')):
+        with patch.object(image_download,'_downloads',slots),patch.object(redirect_policy.network,'get',side_effect=requests.ConnectionError('offline')):
             with self.assertRaises(requests.ConnectionError):image_download.download('https://image')
         self.assertTrue(slots.acquire(blocking=False));slots.release()
     def test_deadline_returns_while_stalled_reader_retains_bounded_slot(self):
@@ -141,7 +142,7 @@ class BoundedImages(unittest.TestCase):
         response=self.response([])
         def chunks(**kw):release.wait(2);yield b'data'
         response.iter_content=chunks;response.close.side_effect=closed.set
-        with patch.object(image_download,'_downloads',slots),patch.object(image_download.requests,'get',return_value=response):
+        with patch.object(image_download,'_downloads',slots),patch.object(redirect_policy.network,'get',return_value=response):
             started=time.monotonic()
             with self.assertRaises(HTTPException) as error:image_download.download('https://image',seconds=.03)
             self.assertEqual(error.exception.status_code,504);self.assertLess(time.monotonic()-started,.5)

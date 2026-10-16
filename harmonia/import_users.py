@@ -1,7 +1,7 @@
 """Read Plex sharing metadata; importing never copies a Plex credential."""
 from defusedxml import ElementTree as ET
 from defusedxml.common import DefusedXmlException
-import requests
+from . import network
 from fastapi import HTTPException
 from pydantic import BaseModel,Field
 from . import accounts
@@ -16,9 +16,9 @@ def eligible():
     if not machine:raise HTTPException(502,'Plex server identity unavailable.')
     def xml(url):
         try:
-            r=requests.get(url,headers={**accounts.headers(token),'Accept':'application/xml'},timeout=(5,20));r.raise_for_status()
+            r=network.get(url,headers={**accounts.headers(token),'Accept':'application/xml'},timeout=(5,20));r.raise_for_status()
             return ET.fromstring(r.content, forbid_dtd=True)
-        except (requests.RequestException,ET.ParseError,DefusedXmlException) as exc:
+        except (network.RequestException,ET.ParseError,DefusedXmlException) as exc:
             raise HTTPException(502,'Could not read Plex sharing permissions. No users were imported.') from exc
     users=xml('https://plex.tv/api/users')
     result=[]

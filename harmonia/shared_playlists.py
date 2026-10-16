@@ -18,7 +18,7 @@ def register(app):
     @app.post('/api/shared-playlists/metadata')
     def metadata(body: Lookup):
         if not actor() or not actor().get('admin'):raise HTTPException(403,'Administrator access required.')
-        import requests
+        from . import network
         from urllib.parse import urlsplit
         from bs4 import BeautifulSoup
         from .config import Config
@@ -27,7 +27,7 @@ def register(app):
         if parsed.scheme!='https' or parsed.hostname not in ('music.apple.com','open.spotify.com') or parsed.username or parsed.password:
             raise HTTPException(422,'Enter a public Spotify or Apple Music HTTPS playlist URL.')
         try:
-            response=requests.get(url,timeout=(5,15),allow_redirects=False)
+            response=network.get(url,timeout=(5,15),allow_redirects=False)
             response.raise_for_status()
             page=BeautifulSoup(response.content,'html.parser')
             tag=page.find('meta',property='og:title')
@@ -36,7 +36,7 @@ def register(app):
             from .source_names import clean
             name=clean(name)
             return {'name':name}
-        except (requests.RequestException,ValueError):
+        except (network.RequestException,ValueError):
             raise HTTPException(502,'Could not fetch the source name. Enter a name manually.')
 
     @app.get('/api/shared-playlists')

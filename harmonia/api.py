@@ -23,11 +23,11 @@ from .route_access import require_route_access
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
-from . import network as requests
+from . import network
 
 from . import __version__, __build__, __release_name__
 from . import jobs
-from datetime import datetime, timezone
+from datetime import timezone
 from .bootstrap import _ensure_requirements
 _ensure_requirements()
 
@@ -111,6 +111,7 @@ class PlexSettingsRequest(BaseModel):
     music_library_key: str
 
 class MissingCandidateRequest(BaseModel):
+    artists: list[dict[str, str] | str] = Field(default_factory=list, max_length=50)
     title: str
     artist: str
     album: str = ""
@@ -131,7 +132,8 @@ class MissingMatchRequest(BaseModel):
 
 class NotificationSettingsRequest(BaseModel):
     enabled: bool = False
-    url: str = ""
+    url: str = Field(default="", max_length=2048)
+    allow_private: bool = False
     notify_sync_failures: bool = True
     notify_lost_matches: bool = True
     notify_unresolved: bool = True
@@ -331,7 +333,7 @@ def _validated_plex_libraries(url: str, token: str) -> List[dict]:
         raise HTTPException(status_code=400, detail="Plex URL and token are required")
 
     try:
-        response = requests.get(
+        response = network.get(
             f"{base_url}/identity",
             headers={"X-Plex-Token": plex_token},
             timeout=8,
@@ -1091,6 +1093,9 @@ def put_notification_settings(request: NotificationSettingsRequest):
     with ProcessLock():
         config = _config()
         settings = WebhookSettings.from_dict(request.model_dump())
+        if settings.url or settings.enabled:
+            from .webhook_transport import destination
+            destination(settings.url, settings.allow_private)
         config.config["notifications"] = settings.to_dict()
         config.save()
         return settings.to_dict()
@@ -1109,8 +1114,10 @@ def test_notification():
             {"version": __version__},
         )
         return {"sent": sent}
-    except Exception as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=502, detail="Notification delivery failed. Check the server URL and connection.") from None
 
 
 @app.get("/api/settings/logs")
@@ -1164,8 +1171,6 @@ class ScheduleRequest(BaseModel):
 
 
 def job_store():
-    from .storage import get_repository
-    from .runtime_paths import CONFIG_DIR
     from .accounts import personal_repository
     return jobs.Store(personal_repository())
 
@@ -1846,7 +1851,7 @@ def remove_selected(request):
                     if not plex_id:raise ValueError('This registration has no Plex playlist ID')
                     if any(str(p.get('plex_playlist_id',''))==plex_id and _playlist_key(p) not in selected for p in config.config['playlists']):
                         raise ValueError('Another unselected registration uses this Plex playlist. Remove from Harmonia only or select every registration.')
-                    response=requests.delete(f'{plex.base_url}/playlists/{plex_id}',headers=plex.headers,timeout=15)
+                    response=network.delete(f'{plex.base_url}/playlists/{plex_id}',headers=plex.headers,timeout=15)
                     if response.status_code not in (200,204,404):
                         raise ValueError(f'Plex deletion failed (HTTP {response.status_code}); registration retained.')
                 remaining=[p for p in config.config['playlists'] if _playlist_key(p)!=key]
@@ -1890,7 +1895,7 @@ def retry_automatic(request: MissingCandidateRequest):
     config = _config(read_only=True,namespaces=['artist_aliases'])
     from .library import playable_tracks
     library = playable_tracks()
-    source = request.model_dump(include={'title','artist','album','duration'})
+    source = request.model_dump(include={'title','artist','album','duration','artists'})
     # Deliberately omit saved mappings so the unchanged matcher gets a fresh try.
     candidate_id = Matcher.match_track(source, library, {})
     candidate = next((t for t in library if str(t.get('plex_id')) == str(candidate_id)), None) if candidate_id is not None else None
@@ -1968,9 +1973,61 @@ register_text_playlists(app)
 from .playlist_overlays import register as register_playlist_overlays
 register_playlist_overlays(app)
 
+
+
+@app.get('/api/admin/missing')
+@saved_page('administrator missing tracks', PAGE_DATA | {'all_account_missing'})
+def administrator_missing_tracks():
+    from .accounts import users, as_user
+    rows = []
+    for user_id, user in users().items():
+        if user.get('disabled') or user.get('pending_login'):
+            continue
+        with as_user({k: v for k, v in user.items() if k != 'server_context'}):
+            for row in missing_tracks.__wrapped__():
+                rows.append({**row, 'user_id': str(user_id), 'user_name': user.get('name') or str(user_id)})
+    return rows
+
+
+class AdministratorMatchRequest(MissingMatchRequest):
+    target_user_id: str
+
+
+@app.post('/api/admin/missing/match', status_code=202)
+def administrator_match(request: AdministratorMatchRequest):
+    from .accounts import users, as_user, actor
+    from .match_queue import stage_match, available
+    administrator = actor()
+    user = users().get(request.target_user_id)
+    if not user or user.get('disabled') or user.get('pending_login'):
+        raise HTTPException(404, 'Active user not found.')
+    with as_user({k: v for k, v in user.items() if k != 'server_context'}):
+        # An administrator explicitly confirms this choice for the target user.
+        staged = stage_match(request.model_copy(update={'provenance': 'manual'}))
+        store = job_store()
+        with store.repository.connect() as db:
+            db.execute('BEGIN IMMEDIATE')
+            rows = [r for r in available(store.repository, db)
+                    if r['id'] in staged['ids']]
+            if not rows:
+                raise HTTPException(409, 'No missing occurrences remain for this user.')
+            job_id = store.enqueue('match_batch', {'changes': rows}, db=db)
+            for row in rows:
+                db.execute("UPDATE state SET value=? WHERE namespace='match_drafts' AND key=?",
+                           (json.dumps({**row, 'job_id': job_id}), row['id']))
+        from .accounts import root_repository
+        root_repository().add_log('INFO', 'Administrator matching',
+                                  f"Administrator {administrator['id']} queued a manual match for user {request.target_user_id}: {request.title}")
+        return {**store.get(job_id), 'message': f"Manual match and sync queued for {user.get('name') or request.target_user_id}."}
+
+
 WEB_DIST = Path(__file__).resolve().parent.parent / "web" / "dist"
-if WEB_DIST.exists():
-    app.mount("/", StaticFiles(directory=WEB_DIST, html=True), name="web")
+def mount_frontend(application, directory):
+    if directory.exists():
+        application.mount("/", StaticFiles(directory=directory, html=True), name="web")
+
+
+mount_frontend(app, WEB_DIST)
 
 
 def run():

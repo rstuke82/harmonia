@@ -175,7 +175,7 @@ class MultiUser(unittest.TestCase):
         response=Mock(status_code=200)
         response.json.return_value={'recordings':[{'id':'recording','title':'Song','artist-credit':[{'name':'Artist'}],'releases':[{'date':'1995-05-01','release-group':{'id':'group','title':'Album','primary-type':'Album'}},{'date':'1998','release-group':{'id':'group','title':'Album','primary-type':'Album'}}]}]}
         response.json.return_value['releases']=[{**r,'artist-credit':[{'name':'Artist'}]} for r in response.json.return_value['recordings'][0]['releases']]
-        with patch('harmonia.musicbrainz_client._session.get',return_value=response),patch('harmonia.musicbrainz_client.time.sleep'),patch.object(api,'_record_log'):
+        with patch('harmonia.musicbrainz_client.network.get',return_value=response),patch('harmonia.musicbrainz_client.time.sleep'),patch.object(api,'_record_log'):
             result=lidarr.musicbrainz_search(self.repo,{},lidarr.Lookup(title='Song',artist='Artist',provider='musicbrainz'),test=True)
         self.assertEqual(result['rows'][0]['year'],'1995')
 

@@ -8,7 +8,7 @@ from test_build_20261007_14 import AlbumReads,ALBUM
 class AlbumServiceLinks(AlbumReads):
     def setUp(self):
         super().setUp()
-        mock=patch('harmonia.album_apple_artwork.requests.get',return_value=Mock(status_code=200,json=lambda:{'results':[{'wrapperType':'collection','collectionType':'Album','collectionId':123,'artworkUrl100':'https://is1-ssl.mzstatic.com/cover/100x100bb.jpg'}]}))
+        mock=patch('harmonia.album_apple_artwork.network.get',return_value=Mock(status_code=200,json=lambda:{'results':[{'wrapperType':'collection','collectionType':'Album','collectionId':123,'artworkUrl100':'https://is1-ssl.mzstatic.com/cover/100x100bb.jpg'}]}))
         mock.start();self.addCleanup(mock.stop)
         app=FastAPI();library.register(app)
         self.get=next(r.endpoint for r in app.routes if r.path.endswith('/service-links') and 'GET' in r.methods)

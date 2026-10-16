@@ -145,10 +145,10 @@ class Build84(unittest.TestCase):
         valid=b'<MediaContainer><User id="2" email="member@example.test" title="Member"><Server machineIdentifier="server" allLibraries="1" /></User></MediaContainer>'
         empty=b'<MediaContainer />'
         def response(body):return SimpleNamespace(content=body,raise_for_status=lambda:None)
-        with self.xml_setup(),patch.object(import_users.requests,'get',side_effect=[response(valid),response(empty)]):
+        with self.xml_setup(),patch.object(import_users.network,'get',side_effect=[response(valid),response(empty)]):
             self.assertEqual(import_users.eligible()[0]['id'],'2')
         for body in (b'<!DOCTYPE x [<!ENTITY x "bad">]><x>&x;</x>',b'<!DOCTYPE x SYSTEM "file:///etc/passwd"><x/>',b'<broken'):
-            with self.subTest(body=body),self.xml_setup(),patch.object(import_users.requests,'get',return_value=response(body)),self.assertRaises(HTTPException) as error:import_users.eligible()
+            with self.subTest(body=body),self.xml_setup(),patch.object(import_users.network,'get',return_value=response(body)),self.assertRaises(HTTPException) as error:import_users.eligible()
             self.assertEqual(error.exception.status_code,502)
 
 if __name__=='__main__':unittest.main()

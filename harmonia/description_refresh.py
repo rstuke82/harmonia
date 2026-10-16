@@ -1,5 +1,5 @@
 """Queued description-only updates; never advance the successful sync time."""
-import requests
+from . import network
 from . import jobs
 
 
@@ -36,7 +36,7 @@ def execute(payload):
             if _playlist_key(playlist) not in payload.get('playlist_keys', []) or not playlist.get('last_synced'):
                 continue
             jobs.progress('Updating next scheduled sync in Plex: ' + playlist.get('plex_playlist_name', 'Playlist'))
-            response = requests.get(f"{plex.base_url}/playlists/{playlist['plex_playlist_id']}", headers=plex.headers, timeout=20)
+            response = network.get(f"{plex.base_url}/playlists/{playlist['plex_playlist_id']}", headers=plex.headers, timeout=20)
             response.raise_for_status()
             rows = response.json().get('MediaContainer', {}).get('Metadata', [])
             if not rows:
@@ -53,7 +53,7 @@ def execute(payload):
             at = next((i+1 for i, line in enumerate(lines) if line.startswith('Last successful sync:')), len(lines))
             lines.insert(at, next_line)
             updated = description.split(marker, 1)[0] + MARKER + '\n'.join(lines)
-            write = requests.put(f"{plex.base_url}/playlists/{playlist['plex_playlist_id']}", headers=plex.headers, params={'summary': updated}, timeout=20)
+            write = network.put(f"{plex.base_url}/playlists/{playlist['plex_playlist_id']}", headers=plex.headers, params={'summary': updated}, timeout=20)
             write.raise_for_status()
             changed += 1
     return {'summary': f'Updated scheduled-sync descriptions for {changed} playlists. No tracks or sync timestamps changed.'}

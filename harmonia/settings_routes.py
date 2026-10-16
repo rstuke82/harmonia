@@ -24,7 +24,7 @@ class FactoryResetRequest(BaseModel):
 
 
 def register(app):
-    from .api import job_store, _config, _playlist_key
+    from .api import job_store, _config
     from .process_lock import ProcessLock
     from . import tasks, backups
 

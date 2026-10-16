@@ -6,6 +6,34 @@ on:
 permissions:
   contents: read
 jobs:
+  quality:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0 (Node.js 24)
+        with:
+          persist-credentials: false
+      - name: Install pinned quality tools
+        run: |
+          python3 -m venv "$RUNNER_TEMP/harmonia-quality"
+          "$RUNNER_TEMP/harmonia-quality/bin/python" -m pip install -r requirements-dev.txt
+      - name: Check lint regression and formatting
+        run: '"$RUNNER_TEMP/harmonia-quality/bin/python" scripts/lint.py'
+  browser:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0 (Node.js 24)
+        with:
+          persist-credentials: false
+      - name: Install browser test dependencies
+        run: |
+          npm --prefix web ci
+          python3 -m venv "$RUNNER_TEMP/harmonia-browser"
+          "$RUNNER_TEMP/harmonia-browser/bin/python" -m pip install -r requirements.lock playwright==1.56.0
+          "$RUNNER_TEMP/harmonia-browser/bin/python" -m playwright install --with-deps chromium --only-shell
+      - name: Verify page loading and background refresh feedback
+        run: '"$RUNNER_TEMP/harmonia-browser/bin/python" scripts/verify_page_loading.py'
+      - name: Verify production CSP and dynamic React styling
+        run: '"$RUNNER_TEMP/harmonia-browser/bin/python" scripts/verify_browser_csp.py'
   image:
     strategy:
       fail-fast: false

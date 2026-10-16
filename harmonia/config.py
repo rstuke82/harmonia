@@ -3,7 +3,7 @@ from typing import List
 from typing import Optional
 import copy
 import re
-from . import network as requests
+from . import network
 from urllib.parse import unquote
 from urllib.parse import urlparse
 from .matching import Matcher
@@ -23,8 +23,8 @@ class Config:
     }
 
     def __init__(self, *, read_only=False, namespaces=None):
-        from .storage import get_repository, read_json
-        from .accounts import personal_repository, root_repository, actor, is_owner
+        from .storage import read_json
+        from .accounts import personal_repository, root_repository, actor
         self.repository = personal_repository()
         self._account = actor()
         self.read_only = read_only
@@ -105,7 +105,7 @@ class Config:
         plex_token: str,
     ) -> List[dict]:
         """Return Plex music libraries available to this server/token."""
-        resp = requests.get(
+        resp = network.get(
             f"{plex_url.rstrip('/')}/library/sections",
             headers={
                 "X-Plex-Token": plex_token,

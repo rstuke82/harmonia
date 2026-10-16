@@ -15,7 +15,7 @@ class HarmoniaNames(unittest.TestCase):
     def test_new_package_launcher(self):
         result = subprocess.run([sys.executable, '-m', 'harmonia', 'version'],
                                 capture_output=True, text=True, check=True)
-        self.assertEqual(result.stdout.strip(), '1.0.0.92')
+        self.assertEqual(result.stdout.strip(), __version__)
 
     def test_root_and_personal_database_names(self):
         with tempfile.TemporaryDirectory() as folder:

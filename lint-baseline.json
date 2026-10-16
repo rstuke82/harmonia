@@ -1,0 +1,404 @@
+[
+  {
+    "path": "harmonia/api.py",
+    "code": "E402",
+    "message": "Module level import not at top of file",
+    "count": 39
+  },
+  {
+    "path": "harmonia/backups.py",
+    "code": "F841",
+    "message": "Local variable `ctx` is assigned to but never used",
+    "count": 1
+  },
+  {
+    "path": "harmonia/console_logging.py",
+    "code": "F841",
+    "message": "Local variable `method` is assigned to but never used",
+    "count": 1
+  },
+  {
+    "path": "harmonia/discover.py",
+    "code": "F841",
+    "message": "Local variable `config` is assigned to but never used",
+    "count": 1
+  },
+  {
+    "path": "harmonia/discover.py",
+    "code": "F841",
+    "message": "Local variable `equivalent` is assigned to but never used",
+    "count": 1
+  },
+  {
+    "path": "harmonia/file_tools.py",
+    "code": "E401",
+    "message": "Multiple imports on one line",
+    "count": 3
+  },
+  {
+    "path": "harmonia/library.py",
+    "code": "F841",
+    "message": "Local variable `files` is assigned to but never used",
+    "count": 1
+  },
+  {
+    "path": "harmonia/library.py",
+    "code": "F841",
+    "message": "Local variable `manual` is assigned to but never used",
+    "count": 1
+  },
+  {
+    "path": "harmonia/library.py",
+    "code": "F841",
+    "message": "Local variable `total` is assigned to but never used",
+    "count": 1
+  },
+  {
+    "path": "harmonia/lidarr.py",
+    "code": "F841",
+    "message": "Local variable `rows` is assigned to but never used",
+    "count": 1
+  },
+  {
+    "path": "harmonia/local_library.py",
+    "code": "F401",
+    "message": "`mutagen` imported but unused",
+    "count": 1
+  },
+  {
+    "path": "harmonia/manual_matches.py",
+    "code": "E402",
+    "message": "Module level import not at top of file",
+    "count": 1
+  },
+  {
+    "path": "harmonia/musicbrainz_settings.py",
+    "code": "E401",
+    "message": "Multiple imports on one line",
+    "count": 1
+  },
+  {
+    "path": "harmonia/text_playlists.py",
+    "code": "E401",
+    "message": "Multiple imports on one line",
+    "count": 1
+  },
+  {
+    "path": "harmonia/track_bridge.py",
+    "code": "E401",
+    "message": "Multiple imports on one line",
+    "count": 1
+  },
+  {
+    "path": "scripts/package_source.py",
+    "code": "E401",
+    "message": "Multiple imports on one line",
+    "count": 1
+  },
+  {
+    "path": "scripts/verify_container_startup.py",
+    "code": "E401",
+    "message": "Multiple imports on one line",
+    "count": 1
+  },
+  {
+    "path": "tests/test_22_beta2.py",
+    "code": "E401",
+    "message": "Multiple imports on one line",
+    "count": 1
+  },
+  {
+    "path": "tests/test_22_beta2.py",
+    "code": "F401",
+    "message": "`contextlib.nullcontext` imported but unused",
+    "count": 1
+  },
+  {
+    "path": "tests/test_22_beta3.py",
+    "code": "E401",
+    "message": "Multiple imports on one line",
+    "count": 1
+  },
+  {
+    "path": "tests/test_30.py",
+    "code": "F401",
+    "message": "`harmonia.jobs.Store` imported but unused",
+    "count": 1
+  },
+  {
+    "path": "tests/test_30.py",
+    "code": "F401",
+    "message": "`unittest.mock.Mock` imported but unused",
+    "count": 1
+  },
+  {
+    "path": "tests/test_30_beta2.py",
+    "code": "F401",
+    "message": "`unittest.mock.MagicMock` imported but unused",
+    "count": 1
+  },
+  {
+    "path": "tests/test_30_beta2.py",
+    "code": "F401",
+    "message": "`unittest` imported but unused",
+    "count": 1
+  },
+  {
+    "path": "tests/test_30_beta2.py",
+    "code": "F841",
+    "message": "Local variable `endpoint` is assigned to but never used",
+    "count": 1
+  },
+  {
+    "path": "tests/test_30_beta3.py",
+    "code": "E401",
+    "message": "Multiple imports on one line",
+    "count": 1
+  },
+  {
+    "path": "tests/test_30_beta3.py",
+    "code": "E402",
+    "message": "Module level import not at top of file",
+    "count": 5
+  },
+  {
+    "path": "tests/test_30_beta3.py",
+    "code": "F401",
+    "message": "`harmonia.api` imported but unused",
+    "count": 1
+  },
+  {
+    "path": "tests/test_30_beta4.py",
+    "code": "E401",
+    "message": "Multiple imports on one line",
+    "count": 1
+  },
+  {
+    "path": "tests/test_30_beta4.py",
+    "code": "F401",
+    "message": "`harmonia.text_playlists.Source` imported but unused",
+    "count": 1
+  },
+  {
+    "path": "tests/test_30_beta4.py",
+    "code": "F401",
+    "message": "`json` imported but unused",
+    "count": 1
+  },
+  {
+    "path": "tests/test_30_beta4.py",
+    "code": "F401",
+    "message": "`time` imported but unused",
+    "count": 1
+  },
+  {
+    "path": "tests/test_audit_04_05_06.py",
+    "code": "F401",
+    "message": "`hashlib` imported but unused",
+    "count": 1
+  },
+  {
+    "path": "tests/test_beta10.py",
+    "code": "E401",
+    "message": "Multiple imports on one line",
+    "count": 1
+  },
+  {
+    "path": "tests/test_beta16.py",
+    "code": "F841",
+    "message": "Local variable `key` is assigned to but never used",
+    "count": 1
+  },
+  {
+    "path": "tests/test_beta7.py",
+    "code": "F401",
+    "message": "`harmonia.jobs.worker_for` imported but unused",
+    "count": 1
+  },
+  {
+    "path": "tests/test_build79.py",
+    "code": "F401",
+    "message": "`json` imported but unused",
+    "count": 1
+  },
+  {
+    "path": "tests/test_build84.py",
+    "code": "E401",
+    "message": "Multiple imports on one line",
+    "count": 1
+  },
+  {
+    "path": "tests/test_build84.py",
+    "code": "F401",
+    "message": "`json` imported but unused",
+    "count": 1
+  },
+  {
+    "path": "tests/test_build84.py",
+    "code": "F401",
+    "message": "`unittest.mock.Mock` imported but unused",
+    "count": 1
+  },
+  {
+    "path": "tests/test_build85.py",
+    "code": "E401",
+    "message": "Multiple imports on one line",
+    "count": 1
+  },
+  {
+    "path": "tests/test_build86.py",
+    "code": "E401",
+    "message": "Multiple imports on one line",
+    "count": 1
+  },
+  {
+    "path": "tests/test_build88.py",
+    "code": "F401",
+    "message": "`importlib.util` imported but unused",
+    "count": 1
+  },
+  {
+    "path": "tests/test_build_20261007_14.py",
+    "code": "F401",
+    "message": "`harmonia.library_inventory` imported but unused",
+    "count": 1
+  },
+  {
+    "path": "tests/test_build_20261007_15.py",
+    "code": "F401",
+    "message": "`json` imported but unused",
+    "count": 1
+  },
+  {
+    "path": "tests/test_build_20261007_19.py",
+    "code": "E401",
+    "message": "Multiple imports on one line",
+    "count": 1
+  },
+  {
+    "path": "tests/test_build_20261007_19.py",
+    "code": "F401",
+    "message": "`time` imported but unused",
+    "count": 1
+  },
+  {
+    "path": "tests/test_build_20261008_13.py",
+    "code": "F401",
+    "message": "`time` imported but unused",
+    "count": 1
+  },
+  {
+    "path": "tests/test_build_20261008_14.py",
+    "code": "E401",
+    "message": "Multiple imports on one line",
+    "count": 1
+  },
+  {
+    "path": "tests/test_build_20261008_14.py",
+    "code": "F401",
+    "message": "`harmonia.edition_preferences.ranker` imported but unused",
+    "count": 1
+  },
+  {
+    "path": "tests/test_health_membership_fixes.py",
+    "code": "F401",
+    "message": "`unittest` imported but unused",
+    "count": 1
+  },
+  {
+    "path": "tests/test_lookup_cancellation.py",
+    "code": "E401",
+    "message": "Multiple imports on one line",
+    "count": 1
+  },
+  {
+    "path": "tests/test_lookup_cancellation.py",
+    "code": "F401",
+    "message": "`time` imported but unused",
+    "count": 1
+  },
+  {
+    "path": "tests/test_match_choice_details.py",
+    "code": "E401",
+    "message": "Multiple imports on one line",
+    "count": 1
+  },
+  {
+    "path": "tests/test_match_choice_details.py",
+    "code": "F841",
+    "message": "Local variable `config` is assigned to but never used",
+    "count": 1
+  },
+  {
+    "path": "tests/test_metadata_refresh_recovery.py",
+    "code": "E401",
+    "message": "Multiple imports on one line",
+    "count": 1
+  },
+  {
+    "path": "tests/test_musicbrainz.py",
+    "code": "E401",
+    "message": "Multiple imports on one line",
+    "count": 1
+  },
+  {
+    "path": "tests/test_musicbrainz_search_jobs.py",
+    "code": "E402",
+    "message": "Module level import not at top of file",
+    "count": 2
+  },
+  {
+    "path": "tests/test_queued_library_artwork.py",
+    "code": "E401",
+    "message": "Multiple imports on one line",
+    "count": 1
+  },
+  {
+    "path": "tests/test_remaining_fixes.py",
+    "code": "E401",
+    "message": "Multiple imports on one line",
+    "count": 1
+  },
+  {
+    "path": "tests/test_reset_and_playlist_edits.py",
+    "code": "F401",
+    "message": "`json` imported but unused",
+    "count": 1
+  },
+  {
+    "path": "tests/test_saved_inventory_reads.py",
+    "code": "E401",
+    "message": "Multiple imports on one line",
+    "count": 1
+  },
+  {
+    "path": "tests/test_saved_view_admin_scope.py",
+    "code": "E401",
+    "message": "Multiple imports on one line",
+    "count": 1
+  },
+  {
+    "path": "tests/test_saved_view_demand.py",
+    "code": "F401",
+    "message": "`harmonia.api` imported but unused",
+    "count": 1
+  },
+  {
+    "path": "tests/test_saved_view_demand.py",
+    "code": "F401",
+    "message": "`unittest.mock.Mock` imported but unused",
+    "count": 1
+  },
+  {
+    "path": "tests/test_saved_view_demand.py",
+    "code": "F841",
+    "message": "Local variable `second` is assigned to but never used",
+    "count": 1
+  },
+  {
+    "path": "tests/test_sync_projection.py",
+    "code": "F401",
+    "message": "`harmonia.saved_views` imported but unused",
+    "count": 1
+  }
+]

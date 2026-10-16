@@ -2,7 +2,7 @@
 import re
 import time
 from urllib.parse import urlsplit
-import requests
+from . import network
 from fastapi import HTTPException
 from .lidarr import state_put
 
@@ -27,7 +27,7 @@ def refresh(repo, album_id, url):
     result = {'url': url, 'artwork': '', 'checked_at': time.time(), 'message': ''}
     if album:
         try:
-            response = requests.get('https://itunes.apple.com/lookup',
+            response = network.get('https://itunes.apple.com/lookup',
                                     params={'id': album, 'country': country, 'entity': 'album'},
                                     timeout=(5, 10), allow_redirects=False)
             response.raise_for_status()
@@ -41,7 +41,7 @@ def refresh(repo, album_id, url):
             result['artwork'] = image_url(match.get('artworkUrl100', '')).replace('100x100bb', '1200x1200bb')
             if not result['artwork']:
                 result['message'] = 'Apple artwork was not found for this album in its storefront. Save the link again to retry.'
-        except (requests.RequestException, ValueError, TypeError, AttributeError):
+        except (network.RequestException, ValueError, TypeError, AttributeError):
             result['message'] = 'The link was saved, but Apple artwork could not be loaded. Save the link again to retry.'
     state_put(repo, NAMESPACE, album_id, result)
     return result

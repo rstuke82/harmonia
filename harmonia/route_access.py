@@ -162,6 +162,19 @@ async def require_route_access(request: Request):
             raise HTTPException(403, 'Download visibility is disabled for this account.')
     # Administrative service operations and shared Library reads use the server
     # context; personal playlist/request routes retain their account context.
+    target_id=request.query_params.get('user_id')
+    if target_id is not None:
+        if not user.get('admin') or getattr(request.state, 'auth_method', '') == 'api_key':
+            raise HTTPException(403, 'Administrator browser access required.')
+        if identity not in {('GET','/api/playlists'),('POST','/api/missing/candidates'),('POST','/api/missing/automatic')}:
+            raise HTTPException(400, 'User selection is not supported for this operation.')
+        from .accounts import users
+        target=users().get(target_id)
+        if not target or target.get('disabled') or target.get('pending_login'):
+            raise HTTPException(404, 'Active user not found.')
+        with as_user({k:v for k,v in target.items() if k!='server_context'}):
+            yield
+        return
     server = user.get('admin') and (not member or (path=='/api/library' or path.startswith('/api/library/')))
     with as_user({**user, 'server_context':True} if server else user):
         yield

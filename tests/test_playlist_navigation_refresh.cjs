@@ -34,7 +34,7 @@ async function navigation(){
 }
 async function savedWatcher(){
  const timers=[],events=[],responses=[{updated:'1',stale:true,body:[{name:'Old'}]},{updated:'2',stale:false,body:[{name:'Fresh'}]},{updated:'2',stale:false,body:[{name:'Fresh'}]}];
- const env={exports:{},location:{origin:'https://harmonia.example'},URL,AbortController,DOMException,document:{hidden:false},window:{dispatchEvent:event=>events.push(event)},CustomEvent:class{constructor(type,options){this.type=type;this.detail=options.detail}},
+ const env={exports:{},require:()=>({beginRead:()=>Object.assign(()=>{},{update(){}}),readEpoch:()=>0,failRead(){}}),location:{origin:'https://harmonia.example'},URL,AbortController,DOMException,document:{hidden:false},window:{dispatchEvent:event=>events.push(event)},CustomEvent:class{constructor(type,options){this.type=type;this.detail=options.detail}},
  setTimeout:(fn,delay)=>{const timer={fn,delay,active:true};timers.push(timer);return timer},clearTimeout:timer=>{if(timer)timer.active=false},fetch:async path=>{assert.equal(path,'/api/playlists');const value=responses.shift();assert(value,'unexpected fetch');return {ok:true,headers:new Headers({'X-Saved-View-Stale':String(value.stale),'X-Saved-View-Updated':value.updated}),json:async()=>value.body}}};
  vm.runInNewContext(compile('web/src/api.ts'),env);
  assert.equal((await env.exports.api.playlists())[0].name,'Old');

@@ -3,7 +3,6 @@ from dataclasses import dataclass
 import queue
 import threading
 import time
-import requests
 from fastapi import HTTPException
 
 _downloads=threading.BoundedSemaphore(4)

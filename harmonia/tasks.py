@@ -139,6 +139,12 @@ def rows(store):
         if task['action'] in ('sync','health'):
             count=len(eligible(store.repository,playlists)) if task['action']=='sync' else len(playlists)
             task.update(playlist_count=count,excluded_count=len(playlists)-count)
+    from .updates import enabled as updates_enabled
+    if not updates_enabled(store.repository):
+        for task in result:
+            if task['action'] == 'check_updates':
+                task.update(enabled=False, next_run=None, configured=False,
+                            disabled_reason='Update checks are disabled in About')
     return result
 
 
@@ -239,6 +245,9 @@ def startup(store):
             for task in store.schedules():
                 action=task['action']
                 if action not in {d[0] for d in DEFINITIONS}:continue
+                if action == 'check_updates':
+                    from .updates import enabled
+                    if not enabled(store.repository):continue
                 if target is not store and action not in ('lastfm_refresh','sync','health'):continue
                 mode=policies.get(action,STARTUP_DEFAULTS.get(action,'never'))
                 if mode=='never':continue

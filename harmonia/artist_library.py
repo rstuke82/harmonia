@@ -48,7 +48,7 @@ def image_url(value):
     return str(value) if parsed.scheme=='https' and (parsed.hostname or '').endswith('.mzstatic.com') else ''
 
 def itunes_get(endpoint,params):
-    import requests
+    from . import network
     global _itunes_last
     key=digest(endpoint+repr(sorted(params.items())))
     saved=repo().load('local_itunes_cache').get(key,{})
@@ -59,8 +59,8 @@ def itunes_get(endpoint,params):
         time.sleep(max(0,3.1-(time.monotonic()-_itunes_last)));_itunes_last=time.monotonic()
         started=time.monotonic()
         try:
-            response=requests.get('https://itunes.apple.com/'+endpoint,params=params,timeout=(5,20));response.raise_for_status();data=response.json()
-        except (requests.RequestException,ValueError) as exc:
+            response=network.get('https://itunes.apple.com/'+endpoint,params=params,timeout=(5,20));response.raise_for_status();data=response.json()
+        except (network.RequestException,ValueError) as exc:
             status=getattr(getattr(exc,'response',None),'status_code',None)
             detail=f'iTunes lookup failed: {type(exc).__name__}'+(f' HTTP {status}' if status else '')
             repo().add_log('ERROR','iTunes',detail);raise ValueError(detail) from None

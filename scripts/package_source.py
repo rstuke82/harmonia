@@ -5,7 +5,7 @@ from pathlib import Path
 def package(root, destination):
     root=Path(root).resolve();destination=Path(destination).resolve()
     files=[]
-    top={'compose.yaml.example','README.md','LICENSE','CHANGELOG.md','SECURITY-DEPLOYMENT.md','requirements.txt','requirements.lock','requirements.in','Dockerfile','.dockerignore','.gitignore','.env.example','RELEASE-NOTES-1.0.0.92.md'}
+    top={'compose.yaml.example','README.md','LICENSE','CHANGELOG.md','SECURITY-DEPLOYMENT.md','requirements.txt','requirements.lock','requirements.in','requirements-dev.txt','pyproject.toml','lint-baseline.json','Dockerfile','.dockerignore','.gitignore','.env.example','RELEASE-NOTES-1.0.0.95.md'}
     for p in root.rglob('*'):
         if not p.is_file():continue
         rel=p.relative_to(root)

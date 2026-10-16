@@ -66,7 +66,7 @@ def register(app):
     @app.post('/api/settings/musicbrainz/test')
     def test():
         import time
-        import requests
+        from . import network
         from .musicbrainz_client import get as mb_get
         repo = repository()
         start = time.monotonic()
@@ -85,13 +85,13 @@ def register(app):
                 repo.save({'musicbrainz_settings':{'preferences':current}})
         except HTTPException:
             raise
-        except requests.HTTPError as exc:
+        except network.HTTPError as exc:
             code=getattr(exc.response,'status_code',None)
             target='configured mirror' if settings(repo).get('server_url') else 'public MusicBrainz'
             if code==404:
                 raise HTTPException(502,f'Public search passed, but {target} returned 404 for the release group it supplied. Check mirror replication and MusicBrainz API support.') from None
             raise HTTPException(502,f'MusicBrainz connection test failed during the direct metadata lookup ({target}{f" · HTTP {code}" if code else ""}).') from None
-        except requests.RequestException as exc:
+        except network.RequestException as exc:
             raise HTTPException(502,f'MusicBrainz connection test could not reach the metadata service: {exc}.') from None
         summary=', '.join(capabilities) if settings(repo).get('server_url') else 'public service provides all supported operations'
         return {'message':f'Connection test succeeded in {time.monotonic()-start:.2f}s. {len(result["rows"])} album candidates returned; {direct.get("title","release group")} loaded. Available capabilities: {summary}.','capabilities':capabilities}

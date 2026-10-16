@@ -19,7 +19,7 @@ function harness(){
  const window={fetch:async(input,init)=>{calls.push({input,init,headers:new Headers(init?.headers),signal:init?.signal});return input==='/api/auth/me'?response(await (typeof me==='function'?me():me)):apiHandler(input,init)},
   addEventListener:(n,f)=>events.set(n,f),removeEventListener:n=>events.delete(n),dispatchEvent:e=>{events.get(e.type)?.(e)},open:()=>null};
  const env={exports:{},window,fetch:(...args)=>window.fetch(...args),location:{href:'http://test/',origin:'http://test',reload:()=>reloads++},localStorage,sessionStorage,Headers,Request,URL,AbortController,DOMException,Event,CustomEvent:class extends Event{constructor(type,options){super(type);this.detail=options.detail}},setTimeout,clearTimeout,
-  require:n=>n==='./activityNotice'?activityModule.exports:n==='react'?react:n==='react/jsx-runtime'?{jsx:(type,props)=>({type,props}),jsxs:(type,props)=>({type,props})}:{default:()=>null}};
+  require:n=>n==='./readActivity'?{beginRead:()=>()=>{},resetReads:()=>{}}:n==='./activityNotice'?activityModule.exports:n==='react'?react:n==='react/jsx-runtime'?{jsx:(type,props)=>({type,props}),jsxs:(type,props)=>({type,props})}:{default:()=>null}};
  vm.runInNewContext(code,env);
  const render=()=>{cursor=0;const tree=env.exports.default();cleanups.push(...effects.splice(0).map(f=>f()));return tree};
  return {env,events,calls,storage,values,response,render,setMe:v=>{me=v},setAPI:f=>{apiHandler=f},reloads:()=>reloads,cleanup:()=>cleanups.forEach(f=>f?.())};

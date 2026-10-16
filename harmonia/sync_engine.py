@@ -4,7 +4,7 @@ from typing import List
 from typing import Optional
 from typing import Tuple
 from datetime import datetime
-from . import network as requests
+from . import network
 import time
 from .apple_music_source import AppleMusicAPI
 from .config import Config
@@ -1305,8 +1305,8 @@ class Syncer:
         plex = self._get_plex()
 
         print(
-            f"\n→ Creating Plex playlist with "
-            f"first matched track..."
+            "\n→ Creating Plex playlist with "
+            "first matched track..."
         )
 
         playlist_id = plex.create_playlist(
@@ -1494,7 +1494,7 @@ class Syncer:
             from . import jobs
             jobs.progress("Checking destination Plex playlist")
             try:
-                response = requests.get(
+                response = network.get(
                     f"{plex.base_url}/playlists/{plex_playlist_id}",
                     headers=plex.headers, timeout=(5, 10),
                 )
@@ -1508,7 +1508,7 @@ class Syncer:
                 metadata = response.json().get("MediaContainer", {}).get("Metadata", [])
                 if not metadata or str(metadata[0].get("ratingKey", "")) != str(plex_playlist_id):
                     raise ValueError("Plex did not confirm the destination playlist. Sync stopped safely.")
-            except requests.RequestException as exc:
+            except network.RequestException as exc:
                 raise ValueError(
                     f"Could not verify Plex playlist {plex_playlist_id} ({type(exc).__name__}). "
                     "Check Plex connectivity and permissions; no playlist changes were attempted."

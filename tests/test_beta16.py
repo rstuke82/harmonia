@@ -103,7 +103,7 @@ class Beta16Tests(unittest.TestCase):
         params={'user':'listener','period':'overall','limit':50}
         key=_lastfm_cache_key('user.getTopAlbums',params)
         repo=Mock();repo.load_one.return_value={'expires':0,'data':{'topalbums':{'album':[{'name':'Saved'}]}}}
-        with patch('harmonia.discover.root_repository',return_value=repo),patch('harmonia.discover.requests.get') as get:
+        with patch('harmonia.discover.root_repository',return_value=repo),patch('harmonia.discover.network.get') as get:
             result=cached_lastfm('user.getTopAlbums',**params)
         self.assertEqual(result['topalbums']['album'][0]['name'],'Saved');get.assert_not_called()
     def test_missing_cached_history_does_not_contact_lastfm(self):
@@ -129,25 +129,25 @@ class Beta16Tests(unittest.TestCase):
         self.assertEqual(close['duration_penalty'],0);self.assertGreater(far['duration_penalty'],0);self.assertEqual(missing['duration_penalty'],0);self.assertGreater(close['adjusted_score'],far['adjusted_score'])
     def test_confirmed_indexed_mirror_receives_search(self):
         response=Mock();response.raise_for_status.return_value=None;response.json.return_value={'artists':[{'id':'found'}]}
-        with patch('harmonia.musicbrainz_settings.settings',return_value={'enabled':True,'server_url':'https://mirror.example','capabilities':['search_artist']}),patch.object(mb._session,'get',return_value=response) as get:
+        with patch('harmonia.musicbrainz_settings.settings',return_value={'enabled':True,'server_url':'https://mirror.example','capabilities':['search_artist']}),patch.object(mb.network,'get',return_value=response) as get:
             result=mb.get(Mock(),'artist',{'query':'test'})
         self.assertTrue(get.call_args.args[0].startswith('https://mirror.example/'))
         self.assertEqual(result['_harmonia_route'],{'source':'mirror','host':'mirror.example','reason':''})
     def test_unconfirmed_mirror_search_stays_public(self):
         response=Mock();response.raise_for_status.return_value=None;response.json.return_value={'artists':[]}
-        with patch('harmonia.musicbrainz_settings.settings',return_value={'enabled':True,'server_url':'https://mirror.example','capabilities':['lookup']}),patch.object(mb._session,'get',return_value=response) as get,patch.object(mb.time,'sleep'):
+        with patch('harmonia.musicbrainz_settings.settings',return_value={'enabled':True,'server_url':'https://mirror.example','capabilities':['lookup']}),patch.object(mb.network,'get',return_value=response) as get,patch.object(mb.time,'sleep'):
             result=mb.get(Mock(),'artist',{'query':'test'})
         self.assertTrue(get.call_args.args[0].startswith(mb.PUBLIC_BASE))
         self.assertEqual(result['_harmonia_route'],{'source':'public','host':'musicbrainz.org','reason':''})
     def test_mirror_failure_records_public_fallback(self):
         response=Mock();response.raise_for_status.return_value=None;response.json.return_value={'release-groups':[]}
-        with patch('harmonia.musicbrainz_settings.settings',return_value={'enabled':True,'server_url':'https://mirror.example','capabilities':['lookup']}),patch.object(mb._session,'get',side_effect=[__import__('requests').Timeout(),response]),patch.object(mb.time,'sleep'):
+        with patch('harmonia.musicbrainz_settings.settings',return_value={'enabled':True,'server_url':'https://mirror.example','capabilities':['lookup']}),patch.object(mb.network,'get',side_effect=[__import__('requests').Timeout(),response]),patch.object(mb.time,'sleep'):
             result=mb.get(Mock(),'release-group/abc')
         self.assertEqual(result['_harmonia_route'],{'source':'public_fallback','host':'musicbrainz.org','reason':'mirror_failed'})
     def test_empty_indexed_mirror_search_falls_back_to_public(self):
         empty=Mock();empty.raise_for_status.return_value=None;empty.json.return_value={'recordings':[]}
         public=Mock();public.raise_for_status.return_value=None;public.json.return_value={'recordings':[{'id':'found'}]}
-        with patch('harmonia.musicbrainz_settings.settings',return_value={'enabled':True,'server_url':'https://mirror.example','capabilities':['search_recording']}),patch.object(mb._session,'get',side_effect=[empty,public]) as get,patch.object(mb.time,'sleep'):
+        with patch('harmonia.musicbrainz_settings.settings',return_value={'enabled':True,'server_url':'https://mirror.example','capabilities':['search_recording']}),patch.object(mb.network,'get',side_effect=[empty,public]) as get,patch.object(mb.time,'sleep'):
             result=mb.get(Mock(),'recording',{'query':'recording:"Song"'})
         self.assertEqual(get.call_count,2);self.assertTrue(get.call_args_list[1].args[0].startswith(mb.PUBLIC_BASE));self.assertEqual(result['_harmonia_route'],{'source':'public_fallback','host':'musicbrainz.org','reason':'mirror_empty'})
     def test_request_link_accepts_same_saved_lidarr_album_with_changed_mbid(self):

@@ -20,7 +20,7 @@ def stage_changes(repo, changes):
         for change in changes:
             entry = {**change, 'revision': str(uuid.uuid4()), 'queued_at': time.time()}
             db.execute("INSERT OR REPLACE INTO state VALUES('match_drafts',?,?)", (draft_id(change), json.dumps(entry)))
-    return {'queued': len({draft_id(c) for c in changes})}
+    return {'queued': len({draft_id(c) for c in changes}), 'ids': list(dict.fromkeys(draft_id(c) for c in changes))}
 
 
 def available(repo, db=None):
@@ -55,7 +55,7 @@ def stage_match(request):
 
 
 def execute(payload):
-    from .api import _config, _health_plex, _playlist_key, _capture, job_store
+    from .api import _config, _playlist_key, _capture, job_store
     from .process_lock import ProcessLock
     from .sync_engine import Syncer
     from .matching import Matcher
@@ -79,8 +79,15 @@ def execute(payload):
                 raise ValueError('A saved match changed since review. Review the match queue before applying.')
             if c['plex_id'] not in lookup:
                 raise ValueError('A queued Plex candidate is no longer available. Review the match queue.')
-            if c['provenance'] == 'automatic' and str(Matcher.match_track(c['source'], library, {})) != c['plex_id']:
-                raise ValueError('An automatic candidate changed. Retry matching before applying the queue.')
+            if c['provenance'] == 'automatic':
+                current = Matcher.match_track(c['source'], library, {})
+                if str(current) != c['plex_id']:
+                    source = c['source']
+                    title = str(source.get('title') or 'Unknown track')[:200]
+                    artist = str(source.get('artist') or 'Unknown artist')[:200]
+                    playlist = str(c.get('playlist_name') or key)[:200]
+                    outcome = 'no confident automatic match' if current is None else 'a different automatic candidate'
+                    raise ValueError(f'Automatic match needs review: {title} — {artist} in {playlist}; validation found {outcome}. No queued edits were applied.')
         jobs.progress(f"Saving {len(changes)} queued match edits")
         for c in changes:
             key = c['playlist_key']; search = c['search_key']

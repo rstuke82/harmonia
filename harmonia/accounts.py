@@ -12,7 +12,7 @@ import json
 import secrets
 import time
 from urllib.parse import urlencode
-import requests
+from . import network
 from fastapi import HTTPException, Request, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
@@ -61,7 +61,7 @@ def personal_repository():
 def public(user):
     from .lidarr import config
     user={**user,'owner':is_owner(user),'can_library_issues':bool(user.get('admin') or user.get('can_library_issues')),'lidarr_enabled':bool(config(root_repository()).get('enabled'))}
-    return {k: user.get(k) for k in ('id', 'name', 'avatar', 'admin', 'can_request', 'can_playlists', 'can_library_issues', 'lidarr_enabled', 'disabled', 'pending_login', 'owner', 'can_downloads', 'can_manage_downloads', 'auto_approve')}
+    return {k: user.get(k) for k in ('id', 'name', 'avatar', 'admin', 'can_request', 'can_view_all_requests', 'can_playlists', 'can_library_issues', 'lidarr_enabled', 'disabled', 'pending_login', 'owner', 'can_downloads', 'can_manage_downloads', 'auto_approve')}
 
 
 def api_key_status(user):
@@ -149,23 +149,35 @@ def api_user(request):
     token=_request_api_token(request)
     if not token or not token.startswith('pb_live_'):return None
     digest=hashlib.sha256(token.encode()).hexdigest()
-    # Re-read authorization and update only the usage field under one lock.
-    # A stale request snapshot must never restore disabled accounts or old keys.
-    with root_repository().connect() as db:
+    repo = root_repository()
+    query = "SELECT key,value FROM state WHERE namespace='accounts' AND json_extract(value,'$.api_key_hash')=?"
+    with repo.connect() as db:
+        row = db.execute(query, (digest,)).fetchone()
+    if row is None:
+        raise HTTPException(401, 'Invalid Harmonia API key.')
+    key, raw = row
+    user = json.loads(raw)
+    if not secrets.compare_digest(user.get('api_key_hash', ''), digest):
+        raise HTTPException(401, 'Invalid Harmonia API key.')
+    if user.get('disabled'):
+        raise HTTPException(403, 'This account has been disabled by the administrator.')
+    now = time.time()
+    if now - float(user.get('api_key_last_used_at') or 0) <= 60:
+        return user
+    # Recheck under the write lock: never revive a disabled account or rotated key.
+    with repo.connect() as db:
         db.execute('BEGIN IMMEDIATE')
-        rows = db.execute("SELECT key,value FROM state WHERE namespace='accounts' AND json_extract(value,'$.api_key_hash')=?", (digest,))
-        for key, raw in rows:
-            user = json.loads(raw)
-            if not secrets.compare_digest(user.get('api_key_hash', ''), digest):
-                continue
-            if user.get('disabled'):
-                raise HTTPException(403,'This account has been disabled by the administrator.')
-            now = time.time()
-            if now - float(user.get('api_key_last_used_at') or 0) > 60:
-                db.execute("UPDATE state SET value=json_set(value,'$.api_key_last_used_at',?) WHERE namespace='accounts' AND key=?", (now, key))
-                user['api_key_last_used_at'] = now
-            return user
-    raise HTTPException(401,'Invalid Harmonia API key.')
+        row = db.execute(query, (digest,)).fetchone()
+        if row is None:
+            raise HTTPException(401, 'Invalid Harmonia API key.')
+        key, raw = row
+        user = json.loads(raw)
+        if user.get('disabled'):
+            raise HTTPException(403, 'This account has been disabled by the administrator.')
+        if now - float(user.get('api_key_last_used_at') or 0) > 60:
+            db.execute("UPDATE state SET value=json_set(value,'$.api_key_last_used_at',?) WHERE namespace='accounts' AND key=?", (now, key))
+            user['api_key_last_used_at'] = now
+        return user
 
 
 def put(namespace, key, value):
@@ -189,12 +201,12 @@ def headers(token=None):
 
 def plex_json(method, url, **kwargs):
     try:
-        response = requests.request(method, url, timeout=(5, 15), **kwargs, allow_redirects=False)
+        response = network.request(method, url, timeout=(5, 15), **kwargs, allow_redirects=False, _service="Plex sign-in", _log_body=False)
         if response.status_code in (401, 403):
             raise HTTPException(403, 'Plex did not authorize this account.')
         response.raise_for_status()
         return response.json()
-    except requests.RequestException as exc:
+    except network.RequestException as exc:
         raise HTTPException(503, 'Plex login is temporarily unavailable. Please try again.') from exc
 
 
@@ -255,7 +267,7 @@ def verify(token, setup_hash=None, *, choose_library=False, library_key=None):
     user = {'id': user_id, 'name': profile.get('username') or profile.get('title') or user_id,
             'avatar': profile.get('thumb', ''), 'owner':owner, 'admin': owner or existing.get('admin',False),
             'can_downloads':existing.get('can_downloads',False),'can_manage_downloads':existing.get('can_manage_downloads',False),
-            'auto_approve':existing.get('auto_approve',owner), 'can_request': existing.get('can_request', True),
+            'auto_approve':existing.get('auto_approve',owner), 'can_view_all_requests': existing.get('can_view_all_requests', False), 'can_request': existing.get('can_request', True),
             'can_playlists':existing.get('can_playlists',True),'can_library_issues':existing.get('can_library_issues',False), 'pending_login':False, 'disabled': False, 'plex_token': server_token, 'verified_at': time.time()}
     # Plex reauthentication refreshes identity and access, but must never rotate
     # the non-expiring automation credential. Rotation is an explicit account action.
@@ -431,6 +443,7 @@ def install(app):
     class Permissions(BaseModel):
         disabled: bool
         can_request: bool
+        can_view_all_requests: bool = False
         can_playlists: bool = True
         can_library_issues: bool | None = None
         admin: bool | None = None

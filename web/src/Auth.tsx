@@ -1,3 +1,4 @@
+import {beginRead,resetReads} from './readActivity'
 import {activityConfirmation} from './activityNotice'
 import {Icon} from './Controls'
 import {createContext,useContext,useEffect,useRef,useState} from 'react'
@@ -9,7 +10,7 @@ let currentAccount:any=null
 export const getAccount=()=>currentAccount
 let sessionGeneration=0
 const sessionRequests=new Set<AbortController>()
-function resetSessionRequests(){sessionGeneration++;for(const controller of sessionRequests)controller.abort();sessionRequests.clear()}
+function resetSessionRequests(){resetReads();sessionGeneration++;for(const controller of sessionRequests)controller.abort();sessionRequests.clear()}
 function acceptAccount(user:any){
  const previous=localStorage.getItem('bridge-account-id')
  currentAccount=user
@@ -25,6 +26,9 @@ window.fetch=async(input,init)=>{
  const url=new URL(typeof input==='string'?input:input instanceof URL?input.href:input.url,location.href)
  if(url.origin!==location.origin||!url.pathname.startsWith('/api/'))return originalFetch(input,init)
  const headers=new Headers(init?.headers||(input instanceof Request?input.headers:undefined))
+ const method=init?.method||(input instanceof Request?input.method:'GET')
+ const tracked=headers.has('X-Harmonia-Read-Tracked');headers.delete('X-Harmonia-Read-Tracked')
+ const finish=tracked?()=>{}:beginRead(url.pathname+url.search,method)
  if(csrf)headers.set('X-Bridge-CSRF',csrf)
  else headers.delete('X-Bridge-CSRF')
  const controller=new AbortController(),signal=init?.signal||(input instanceof Request?input.signal:undefined),generation=sessionGeneration
@@ -45,13 +49,12 @@ window.fetch=async(input,init)=>{
     return value
    }
   }
-  const method=init?.method||(input instanceof Request?input.method:'GET')
   if(response.ok&&!['GET','HEAD','OPTIONS'].includes(method.toUpperCase())&&response.headers.get('Content-Type')?.includes('application/json')){
    const result=await response.clone().json().catch(()=>null)
    if(generation===sessionGeneration){const notice=activityConfirmation(url.pathname,result);if(notice)window.dispatchEvent(new CustomEvent('bridge-notice',{detail:notice}))}
   }
   return response
- }finally{sessionRequests.delete(controller)}
+ }finally{sessionRequests.delete(controller);finish()}
 }
 export default function Auth(){
  const [user,setUser]=useState<any>(null),[loading,setLoading]=useState(true),[error,setError]=useState(''),[waiting,setWaiting]=useState(false),[setup,setSetup]=useState(false),[keyRequired,setKeyRequired]=useState(false),[setupKey,setSetupKey]=useState(''),[libraries,setLibraries]=useState<{key:string;title:string}[]>([]),[libraryKey,setLibraryKey]=useState('')
@@ -109,7 +112,7 @@ function ApiAccess(){
  const shown=secret||data?.prefix||'Creating key…'
  return <section className="panel api-access"><div className="panel-head"><div><h2>API Access</h2><p className="muted">Keys start read-only and never expire. Regenerating a key immediately disables the previous key. Administrator settings require a browser session.</p></div><button disabled={busy||!data?.configured} onClick={regenerate}>Regenerate Key</button></div>{error&&<p role="alert">{error}</p>}<label>API key<div className="api-copy-row"><input readOnly value={shown} onFocus={e=>e.currentTarget.select()} aria-label="Harmonia API key"/><button disabled={!secret} onClick={()=>copy(secret,'API key')}>{copied==='API key'?'Copied ✓':'Copy'}</button></div></label>{secret?<p className="warning-notice">Copy this key now. For security, the complete value will not be shown again.</p>:data?.configured&&<p className="muted">Created {data.created_at?new Date(data.created_at*1000).toLocaleString():'previously'}{data.last_used_at?` · Last used ${new Date(data.last_used_at*1000).toLocaleString()}`:''}. Regenerate it if you no longer have the full value.</p>}<p role="status" aria-live="polite">{copied?`${copied} copied to clipboard.`:''}</p><fieldset disabled={busy||!data?.configured}><legend>API permissions</legend><p className="muted">Read access is always enabled. Grant only what your automation needs.</p>{[['playlists:write','Share and create playlists'],['requests:write','Request albums'],...(user?.admin?[['webhooks:lidarr','Receive Lidarr webhooks']]:[])].map(([value,label])=><label className="inline-choice" key={value}><input type="checkbox" checked={permissions.includes(value)} onChange={e=>{setSaved('');setPermissions(v=>e.target.checked?[...v,value]:v.filter(s=>s!==value))}}/>{label}</label>)}<button type="button" onClick={savePermissions}>Save Permissions</button><p role="status" aria-live="polite">{saved}</p></fieldset><div className="api-guide-grid"><article><h3>iPhone or iPad Shortcut</h3><ol><li>Create a Shortcut that accepts URLs from the Share Sheet.</li><li>Add <strong>Get Contents of URL</strong> using <code>{base}/api/v1/share</code>.</li><li>Choose POST with a JSON body containing <code>url</code> set to <strong>Shortcut Input</strong>.</li><li>Add header <code>Authorization</code> with value <code>Bearer YOUR_KEY</code>.</li></ol><p>Enable Share and create playlists above first. Sharing a public Apple Music or Spotify playlist queues it for your account and uses the server sync schedule.</p><button onClick={()=>copy(base+'/api/v1/share','Share endpoint')}>{copied==='Share endpoint'?'Copied ✓':'Copy Share Endpoint'}</button></article>{user?.admin&&<article><h3>Lidarr Webhook</h3><p>Enable Receive Lidarr webhooks above first. In Lidarr, add a Webhook Connection using POST and this URL:</p><div className="api-copy-row"><input readOnly value={base+'/api/v1/webhooks/lidarr'} onFocus={e=>e.currentTarget.select()}/><button onClick={()=>copy(base+'/api/v1/webhooks/lidarr','Webhook URL')}>{copied==='Webhook URL'?'Copied ✓':'Copy'}</button></div><p>Add the advanced header <code>Authorization</code> with value <code>Bearer YOUR_KEY</code>. Enable Import, Upgrade, Rename, Track Retag, Artist Added/Deleted, and Album Deleted.</p></article>}</div><p><a href="/docs" target="_blank" rel="noreferrer">Open API documentation ↗</a></p></section>
 }
-export function AccountSettings(){const user=useAccount();return <><section className="panel account-settings"><div className="account-profile">{user?.avatar?<img src={user.avatar} alt="" referrerPolicy="no-referrer"/>:<span className="account-avatar-fallback"><Icon name="account"/></span>}<div><h2>{user?.name||'Account'}</h2><p className="muted">Signed in with Plex{user?.admin?' · Administrator':''}</p></div></div><button onClick={signOut}>Sign out</button></section><section className="panel"><h2>More</h2><div className="actions"><a className="button-link" href="#activity">Jobs</a>{user?.admin&&<a className="button-link" href="#missing">Missing tracks</a>}<a className="button-link" href="#blocklist">Blocklist</a><a className="button-link" href="#settings/shared">Shared Playlist Sources</a>{user?.admin&&<a className="button-link" href="#settings/users">Users</a>}{user?.admin&&<a className="button-link" href="#settings">Settings</a>}</div></section><section className="panel"><h2>Manual Matches</h2><p>Review your saved track selections across playlists.</p><a className="button-link" href="#account/matches">View Manual Matches</a></section><ApiAccess/></>}
+export function AccountSettings(){const user=useAccount();return <><section className="panel account-settings"><div className="account-profile">{user?.avatar?<img src={user.avatar} alt="" referrerPolicy="no-referrer"/>:<span className="account-avatar-fallback"><Icon name="account"/></span>}<div><h2>{user?.name||'Account'}</h2><p className="muted">Signed in with Plex{user?.admin?' · Administrator':''}</p></div></div><button onClick={signOut}>Sign out</button></section><section className="panel"><h2>Manual Matches</h2><p>Review your saved track selections across playlists.</p><a className="button-link" href="#account/matches">View Manual Matches</a></section><ApiAccess/></>}
 
 export function RequestAlbumLabel(){return <>Request Album</>}
 

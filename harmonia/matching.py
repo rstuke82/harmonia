@@ -174,7 +174,8 @@ class Matcher:
     def _feature_identity_reason(cls, source, candidate):
         """Distinguish explicit guest conflicts from corroborated omissions."""
         def text(track):
-            credits = track.get('artists') or []
+            from .artist_credits import structured
+            credits = structured(track)
             names = [c.get('name', '') if isinstance(c, dict) else str(c) for c in credits] if isinstance(credits, list) else []
             return cls._normalize_match_text(' '.join([str(track.get(k) or '') for k in ('title', 'artist', 'album')] + names))
         def guests(track):
@@ -204,7 +205,8 @@ class Matcher:
         def album(track):
             return cls._album_identity(track.get('album') or '')
         def lead(track):
-            credits = track.get('artists')
+            from .artist_credits import structured
+            credits = structured(track)
             if isinstance(credits, list) and credits:
                 first = credits[0]
                 value = first.get('name', '') if isinstance(first, dict) else str(first)
@@ -878,7 +880,8 @@ class Matcher:
         # remaining credit explicitly contains a collaboration separator. A
         # lone ampersand in a band name is never sufficient evidence.
         credit_reason = ''
-        credits = source_track.get('artists') or []
+        from .artist_credits import structured
+        credits = structured(source_track)
         lead = ''
         if credits and isinstance(credits, list):
             lead = credits[0].get('name','') if isinstance(credits[0],dict) else str(credits[0])

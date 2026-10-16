@@ -5,7 +5,7 @@ import re
 import threading
 import time
 from pathlib import Path
-import requests
+from . import network
 from fastapi import HTTPException
 from fastapi.responses import Response
 
@@ -41,7 +41,7 @@ def _recover(config,client,path):
     try:
         response=download(client.base_url+'/library/metadata/'+rating,headers=client.headers,max_bytes=2*1024*1024,oversized_status=502)
         items=json.loads(response.content).get('MediaContainer',{}).get('Metadata',[])
-    except requests.HTTPError as exc:
+    except network.HTTPError as exc:
         if exc.response is not None and exc.response.status_code==404:return None
         raise
     except (ValueError,TypeError):return None
@@ -89,19 +89,19 @@ def serve(config,path):
         except (OSError,ValueError,KeyError,TypeError):pass
     try:
         try:response=download(client.base_url+path,headers=client.headers,max_bytes=20*1024*1024,oversized_status=502)
-        except requests.HTTPError as exc:
+        except network.HTTPError as exc:
             if exc.response is None or exc.response.status_code!=404:raise
             updated=_recover(config,client,path)
             if not updated:raise HTTPException(404,'Plex image unavailable') from None
             response=download(client.base_url+updated,headers=client.headers,max_bytes=20*1024*1024,oversized_status=502)
-    except requests.HTTPError as exc:
+    except network.HTTPError as exc:
         if exc.response is not None and exc.response.status_code==404:
             with _lock:
                 _missing[key]=time.monotonic()+30
                 while len(_missing)>256:_missing.pop(next(iter(_missing)))
             raise HTTPException(404,'Plex image unavailable') from None
         raise HTTPException(502,'Plex artwork is temporarily unavailable.',headers={'Retry-After':'2'}) from None
-    except requests.RequestException:
+    except network.RequestException:
         raise HTTPException(502,'Plex artwork is temporarily unavailable.',headers={'Retry-After':'2'}) from None
     except HTTPException as exc:
         if exc.status_code==404:

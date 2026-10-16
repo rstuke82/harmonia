@@ -15,13 +15,15 @@ def preferences():
     return personal_repository().load('preferences').get('discover', {})
 
 
-def blocked(row):
+def blocked(row, *, artist_rules=None, album_rules=None):
     raw_credits = row.get('artists') or [{'name': row.get('artist', ''), 'mbid': row.get('artist_mbid', '')}]
     if not isinstance(raw_credits, list):raw_credits=[raw_credits]
     credits=[c if isinstance(c,dict) else {'name':str(c),'mbid':''} for c in raw_credits if c]
-    rules = [r for r in personal_repository().load('blocked_artists').values() if isinstance(r,dict)]
+    if artist_rules is None:artist_rules=personal_repository().load('blocked_artists').values()
+    rules = [r for r in artist_rules if isinstance(r,dict)]
     artist_blocked=any((r.get('mbid') and r['mbid'] == c.get('mbid')) or normalize(r.get('name','')) == normalize(c.get('name', '')) for r in rules for c in credits)
-    album_rules=[r for r in personal_repository().load('blocked_albums').values() if isinstance(r,dict)]
+    if album_rules is None:album_rules=personal_repository().load('blocked_albums').values()
+    album_rules=[r for r in album_rules if isinstance(r,dict)]
     # Discover and Library use different field names for the same identity.
     row_mbid=row.get('mbid') or row.get('musicbrainz_id') or row.get('album_id')
     row_title=row.get('album') or row.get('title')

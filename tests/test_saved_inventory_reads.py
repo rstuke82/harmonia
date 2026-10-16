@@ -43,7 +43,7 @@ class SavedInventoryReads(unittest.TestCase):
             self.assertEqual(self.client.search_library('')[0]['plex_id'],'saved')
     def test_images_reuse_bytes_and_changed_path_or_account_refetches(self):
         response=Mock(content=b'cover',headers={'Content-Type':'image/jpeg'},iter_content=lambda **kwargs:iter([b'cover']))
-        with patch('harmonia.api._health_plex',return_value=self.client),patch('harmonia.plex_images.requests.get',return_value=response) as get:
+        with patch('harmonia.api._health_plex',return_value=self.client),patch('harmonia.plex_images.network.get',return_value=response) as get:
             self.assertEqual(plex_images.serve(self.config,'/thumb/1').body,b'cover')
             plex_images.serve(self.config,'/thumb/1');self.assertEqual(get.call_count,1)
             plex_images.serve(self.config,'/thumb/2');self.assertEqual(get.call_count,2)

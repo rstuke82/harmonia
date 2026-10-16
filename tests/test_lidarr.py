@@ -187,7 +187,7 @@ class LidarrTests(unittest.TestCase):
             'releases': [{'release-group': {'id': ALBUM, 'title': 'Album', 'primary-type': 'Album'}}]}]}
         query = lidarr.Lookup(title='Track', artist='Artist', provider='musicbrainz')
         response.json.return_value['releases']=[{**r,'artist-credit':[{'name':'Artist'}]} for r in response.json.return_value['recordings'][0]['releases']]
-        with patch('harmonia.musicbrainz_client._session.get', return_value=response) as get:
+        with patch('harmonia.musicbrainz_client.network.get', return_value=response) as get:
             result = lidarr.musicbrainz_search(self.repo, self.cfg, query)
             self.assertFalse(result['cached'])
             result = lidarr.musicbrainz_search(Repository(Path(self.tmp.name)), self.cfg, query)

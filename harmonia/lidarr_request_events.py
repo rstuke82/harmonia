@@ -22,7 +22,7 @@ def update(repo, payload, kind):
     failure = kind != 'grab'
     status = 'Download failed' if kind.startswith('download') else 'Import failed' if failure else 'Download grabbed'
     message = str(payload.get('message') or payload.get('error') or status)[:4000]
-    message = redact(message.replace(str(cfg.get('api_key') or '\x00'), '[REDACTED]'))
+    message = redact(message, secrets=(cfg.get('api_key'),))
     changed = 0
     with repo.connect() as db:
         db.execute('BEGIN IMMEDIATE')

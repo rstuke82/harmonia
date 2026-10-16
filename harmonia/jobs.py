@@ -252,7 +252,7 @@ class Store:
         return self._rows('SELECT * FROM schedules ORDER BY name,id')
 
     def save_schedule(self, data, schedule_id=None):
-        from .tasks import expression, DEFINITIONS, STARTUP_MODES
+        from .tasks import expression, STARTUP_MODES
         if data['action'] not in {'file_audit','local_scan','sync','health','backup','check_updates','availability','plex_scan','lidarr_scan','lastfm_refresh','library_metadata_all','reconcile','retry_missing','database_optimize'}:
             raise ValueError('Unsupported recurring task')
         if data['action'] in ('sync','health') and data['scope']!='all':raise ValueError('This scoped task has been retired; use the consolidated task')
@@ -296,6 +296,11 @@ class Store:
             db.execute('BEGIN IMMEDIATE')
             if db.execute("SELECT 1 FROM jobs WHERE action='restore_backup' AND status IN ('running','cancelling')").fetchone():return
             for sid,action,scope,cron,zone in db.execute('SELECT id,action,scope,cron,timezone FROM schedules WHERE enabled=1 AND next_run<=?', (timestamp,)).fetchall():
+                if action == 'check_updates':
+                    from .updates import enabled
+                    if not enabled(self.repository):
+                        db.execute('UPDATE schedules SET next_run=? WHERE id=?', (next_run(cron,zone,datetime.fromisoformat(timestamp)),sid))
+                        continue
                 from .accounts import scheduled_members
                 scheduled_members(action,sid)
                 active = db.execute("SELECT 1 FROM jobs WHERE action=? AND COALESCE(json_extract(payload,'$.scope'),'all')=? AND status IN ('queued','running','cancelling')", (action,scope)).fetchone()

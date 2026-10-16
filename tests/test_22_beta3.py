@@ -45,7 +45,7 @@ class Beta3(unittest.TestCase):
  def test_rename_is_latest_value_and_keeps_identity(self):
   config=SimpleNamespace(config={'playlists':self.playlists},save=Mock())
   plex=SimpleNamespace(base_url='http://plex',headers={})
-  with patch('harmonia.api._config',return_value=config),patch('harmonia.api.job_store',return_value=self.store),patch('harmonia.api._health_plex',return_value=plex),patch('harmonia.process_lock.ProcessLock',return_value=nullcontext()),patch('requests.put') as put:
+  with patch('harmonia.api._config',return_value=config),patch('harmonia.api.job_store',return_value=self.store),patch('harmonia.api._health_plex',return_value=plex),patch('harmonia.process_lock.ProcessLock',return_value=nullcontext()),patch('harmonia.network.put') as put:
    first=queued_settings.enqueue(['spotify:1'],{'name':'First'})
    last=queued_settings.enqueue(['spotify:1'],{'name':'Heavy Rotation — Ryan'})
    self.assertEqual(first['job_id'],last['job_id']);queued_settings.execute()

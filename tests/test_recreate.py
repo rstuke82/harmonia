@@ -22,7 +22,7 @@ class RecreateTests(unittest.TestCase):
              patch('harmonia.api._health_plex', return_value=plex), \
              patch('harmonia.api.sync_one', return_value={'summary': 'rebuilt'}) as sync, \
              patch('harmonia.process_lock.ProcessLock', Lock), \
-             patch('requests.get', return_value=missing):
+             patch('harmonia.network.get', return_value=missing):
             result = execute({'playlist_key': 'apple:favorite'})
         self.assertEqual(result, {'summary': 'rebuilt'})
         self.assertEqual(playlist['plex_playlist_id'], '')
@@ -41,7 +41,7 @@ class RecreateTests(unittest.TestCase):
              patch('harmonia.api._health_plex', return_value=plex), \
              patch('harmonia.api.sync_one', return_value={'summary': 'rebuilt'}), \
              patch('harmonia.process_lock.ProcessLock', Lock), \
-             patch('requests.get') as get:
+             patch('harmonia.network.get') as get:
             execute({'playlist_key': 'spotify:mix'})
         get.assert_not_called()
 

@@ -1,3 +1,4 @@
+import {beginRead,failRead,readEpoch} from './readActivity'
 export type Job = {
   worker?:string;owner_id?:string; owner_name?:string;activity?:any;id:string;action:string;status:string;progress:string;error?:string;payload:any;result:any;created_at:string;started_at?:string;finished_at?:string}
 export const activityJob = (job:Job) => !['prepare_views','request_status'].includes(job.action)
@@ -54,6 +55,8 @@ export type PlexLibrary = {
 }
 
 export type MissingTrack = {
+  user_id?:string
+  user_name?:string
   title: string
   artist: string
   album?: string
@@ -94,40 +97,71 @@ export function changedData(path:string){
  generation++
  window.dispatchEvent(new CustomEvent('saved-data-changed',{detail:{path,generation}}))
 }
-const watching = new Map<string,ReturnType<typeof setTimeout>>()
+const trackedHeaders={'Content-Type':'application/json','X-Harmonia-Read-Tracked':'true'}
+async function readPhase(response:Response,finish:ReturnType<typeof beginRead>,signal:AbortSignal){
+ const id=response.headers.get('X-Saved-View-Job');if(!id)return
+ const controller=new AbortController(),abort=()=>controller.abort()
+ if(signal.aborted)abort();else signal.addEventListener('abort',abort,{once:true})
+ const timer=setTimeout(abort,5000)
+ try{
+  const state=await fetch('/api/jobs/'+encodeURIComponent(id),{headers:trackedHeaders,signal:controller.signal})
+  if(!state.ok)return
+  const job=await state.json()
+  if(['failed','cancelled','interrupted'].includes(job.status))return true
+  if(job.status==='queued')finish.update(job.progress||'Waiting for page preparation…')
+  else if(job.status==='running')finish.update(job.progress||'Preparing page data…')
+  else if(job.status==='cancelling')finish.update('Page preparation is stopping…')
+ }catch{}finally{clearTimeout(timer);signal.removeEventListener('abort',abort)}
+}
+const watching = new Map<string,{epoch:number;timer:ReturnType<typeof setTimeout>;finish:ReturnType<typeof beginRead>}>()
 function watchSaved(path:string,updated:string){
- const query=new URL(path,location.origin);query.searchParams.delete('refresh');path=query.pathname+query.search
- if(watching.has(path))return
+ const query=new URL(path,location.origin);query.searchParams.delete('refresh');query.searchParams.delete('progress_id');path=query.pathname+query.search
+ const epoch=readEpoch(),existing=watching.get(path)
+ if(existing?.epoch===epoch)return
+ if(existing){clearTimeout(existing.timer);existing.finish();watching.delete(path)}
+ const route=location.hash||'#discover',finish=beginRead(path,'GET',true)
  let count=0
+ const stop=()=>{finish();if(watching.get(path)===watch)watching.delete(path)}
  const poll=async()=>{
-  watching.delete(path)
-  if(document.hidden||++count>60)return
+  if(readEpoch()!==epoch||document.hidden){stop();return}
+  if(++count>100){stop();failRead(path,route,'Your last loaded data is still shown. Retry when the server is ready.');return}
+  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),30000)
   try{
-   const response=await fetch(path,{headers:{'Content-Type':'application/json'}})
-   if(!response.ok)return
+   const response=await fetch(path,{headers:trackedHeaders,signal:controller.signal})
+   if(readEpoch()!==epoch){stop();return}
+   if(!response.ok)throw Error('Refresh unavailable')
    if(response.headers.get('X-Saved-View-Updated')!==updated&&!response.headers.get('X-Saved-View-Pending')){
-    window.dispatchEvent(new CustomEvent('saved-view-updated',{detail:{path}}));return
+    stop();window.dispatchEvent(new CustomEvent('saved-view-updated',{detail:{path}}));return
    }
-   if(response.headers.get('X-Saved-View-Stale')!=='true')return
-   watching.set(path,setTimeout(poll,3000))
-  }catch{}
+   if(response.headers.get('X-Saved-View-Stale')!=='true'){stop();return}
+   if(await readPhase(response,finish,controller.signal))throw Error('Page preparation stopped')
+   if(readEpoch()!==epoch){stop();return}
+   watch.timer=setTimeout(poll,3000)
+  }catch{
+   stop();if(readEpoch()===epoch)failRead(path,route,'Your last loaded data is still shown. Check the connection and retry.')
+  }finally{clearTimeout(timer)}
  }
- watching.set(path,setTimeout(poll,2000))
+ const watch={epoch,timer:setTimeout(poll,2000),finish}
+ watching.set(path,watch)
 }
 const pending = new Map<string, Promise<any>>()
 async function send<T>(path:string, init?:RequestInit):Promise<T> {
+  const finish=beginRead(path,init?.method||'GET')
   const controller = new AbortController()
   const timer = setTimeout(()=>controller.abort(), path.startsWith('/api/discover')||path.startsWith('/api/requests-user/')||path.startsWith('/api/library')||path.startsWith('/api/playlists')||path==='/api/lidarr/requests' ? 120000 : path.includes('/detail?') ? 65000 : 30000)
   let preparing=false
   const readURL=new URL(path,location.origin);readURL.searchParams.delete('refresh');readURL.searchParams.delete('progress_id');const pollPath=readURL.pathname+readURL.search
   try {
     let response = await fetch(path, {...init, signal:controller.signal,
-      headers:{'Content-Type':'application/json', ...init?.headers}})
+      headers:{...trackedHeaders,...init?.headers}})
+    let lastPhase=0
     while(response.headers.get('X-Saved-View-Pending')==='true'){
       preparing=true
+      if(!lastPhase)finish.update('Preparing page data…')
+      if(Date.now()-lastPhase>=3000){if(await readPhase(response,finish,controller.signal))throw new Error('Page preparation stopped. Refresh this page to retry or open Jobs for details.');lastPhase=Date.now()}
       await new Promise(resolve=>setTimeout(resolve,1000))
       if(controller.signal.aborted)throw new DOMException('Saved view is still preparing','AbortError')
-      response=await fetch(pollPath,{...init,signal:controller.signal,headers:{'Content-Type':'application/json',...init?.headers}})
+      response=await fetch(pollPath,{...init,signal:controller.signal,headers:{...trackedHeaders,...init?.headers}})
     }
     if(response.headers.get('X-Saved-View-Stale')==='true')watchSaved(path,response.headers.get('X-Saved-View-Updated')||'0')
     if (!response.ok) {
@@ -140,8 +174,9 @@ async function send<T>(path:string, init?:RequestInit):Promise<T> {
   } catch (error:any) {
     if (error.name === 'AbortError'&&preparing) {watchSaved(pollPath,'0');throw new Error('Saved data is still preparing in Activity. You can keep browsing and return shortly.')}
     if (error.name === 'AbortError') throw new Error(path==='/api/requests-user/add'?'Request timed out. Check Requests before trying again.':'Request timed out. Check service connectivity and retry.')
+    if(error instanceof TypeError)throw new Error('Connection to Harmonia was interrupted. Retry when the connection returns.')
     throw error
-  } finally { clearTimeout(timer) }
+  } finally { clearTimeout(timer);finish() }
 }
 export function request<T>(path:string, init?:RequestInit):Promise<T> {
   if (init?.method && init.method !== 'GET') return send<T>(path,init)
@@ -180,6 +215,7 @@ export const api = {
   trackDetails: (track:any)=>request<any>('/api/tracks/details',{method:'POST',body:JSON.stringify(track)}),
   trackPreview: (data:any)=>request<any>('/api/tracks/preview',{method:'POST',body:JSON.stringify(data)}),
   updates: ()=>request<any>('/api/updates'),
+  updateSettings: (enabled:boolean)=>request<any>('/api/settings/updates',{method:'PUT',body:JSON.stringify({enabled})}),
   checkUpdates: ()=>request<any>('/api/updates/check',{method:'POST'}),
   live: (id:string,after=0) => request<{job:Job;events:any[]}>(`/api/jobs/${id}/live?after=${after}`),
   jobLog: async (id:string) => {const response=await fetch(`/api/jobs/${id}/log`);if(!response.ok)throw new Error('Could not load log');return response.text()},
@@ -187,7 +223,7 @@ export const api = {
   events: (id:string,after=0) => request<any[]>(`/api/jobs/${id}/events?after=${after}`),
   removePlaylist: (key:string) => request<any>(`/api/playlists/${encodeURIComponent(key)}`,{method:'DELETE'}),
   recreatePlaylist: (key:string) => request<Job>(`/api/playlists/${encodeURIComponent(key)}/recreate`,{method:'POST',body:JSON.stringify({confirmed:true})}),
-  automatic: (track:any) => request<any>('/api/missing/automatic',{method:'POST',body:JSON.stringify(track)}),
+  automatic: (track:any,userId?:string) => request<any>('/api/missing/automatic'+(userId?'?user_id='+encodeURIComponent(userId):''),{method:'POST',body:JSON.stringify(track)}),
   jobs: () => request<Job[]>('/api/jobs'),
   enqueue: async(action:string,payload:any={}) => {
     const bytes=crypto.getRandomValues(new Uint8Array(16));bytes[6]=(bytes[6]&15)|64;bytes[8]=(bytes[8]&63)|128
@@ -233,7 +269,7 @@ export const api = {
     finally{done=true;if(timer)clearTimeout(timer)}
   },
   health: () => request<any>('/api/health'),
-  playlists: () => request<Playlist[]>('/api/playlists'),
+  playlists: (userId?:string) => request<Playlist[]>('/api/playlists'+(userId?'?user_id='+encodeURIComponent(userId):'')),
   playlistHealth: (key: string) => request<PlaylistHealth>(`/api/playlists/${encodeURIComponent(key)}/health`, {method:'POST'}),
   updatePlaylist: (key: string, body: {name?:string;restore_source_name?:boolean}) =>
     request<any>(`/api/playlists/${encodeURIComponent(key)}`, {
@@ -248,8 +284,8 @@ export const api = {
   syncFavorites: () => request<any>('/api/sync/favorites', { method: 'POST' }),
   syncOne: (key: string) => request<any>(`/api/sync/${encodeURIComponent(key)}`, { method: 'POST' }),
   missing: (scope: 'all' | 'favorites' = 'all') => request<MissingTrack[]>(`/api/missing?scope=${scope}`),
-  candidates: (track: Pick<MissingTrack, 'title' | 'artist' | 'album'> & { query?: string }) =>
-    request<Candidate[]>('/api/missing/candidates', { method: 'POST', body: JSON.stringify(track) }),
+  candidates: (track: Pick<MissingTrack, 'title' | 'artist' | 'album'> & { query?: string }, userId?:string) =>
+    request<Candidate[]>('/api/missing/candidates'+(userId?'?user_id='+encodeURIComponent(userId):''), { method: 'POST', body: JSON.stringify(track) }),
   saveMatch: (track: MissingTrack, plex_id: string, options: {playlist_keys?: string[]; replace_playlist_key?: string} = {}) =>
     request<Job>('/api/missing/match', {
       method: 'POST',

@@ -7,7 +7,7 @@ from . import jobs
 def execute(payload):
     from .api import _config, _playlist_key, _health_plex, sync_one
     from .process_lock import ProcessLock
-    import requests
+    from . import network
     with ProcessLock():
         config = _config()
         playlist = next((p for p in config.config['playlists'] if _playlist_key(p) == payload['playlist_key']), None)
@@ -18,7 +18,7 @@ def execute(payload):
         plex.search_library('')
         destination_id = str(playlist.get('plex_playlist_id') or '').strip()
         if destination_id:
-            response = requests.get(f"{plex.base_url}/playlists/{destination_id}", headers=plex.headers, timeout=(5, 15))
+            response = network.get(f"{plex.base_url}/playlists/{destination_id}", headers=plex.headers, timeout=(5, 15))
             if response.status_code != 404:
                 response.raise_for_status()
                 raise ValueError('The existing Plex playlist is accessible. Sync it instead of recreating it.')

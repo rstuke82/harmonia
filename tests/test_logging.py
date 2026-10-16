@@ -52,7 +52,7 @@ class DiagnosticsTests(unittest.TestCase):
         from unittest.mock import patch
         from fastapi import HTTPException
         from harmonia.lidarr import Client
-        with patch('harmonia.lidarr.requests.request', side_effect=requests.Timeout('upstream timed out')), patch('harmonia.api._record_log') as log:
+        with patch('harmonia.lidarr.network.request', side_effect=requests.Timeout('upstream timed out')), patch('harmonia.api._record_log') as log:
             with self.assertRaises(HTTPException) as raised:
                 Client({'url':'http://lidarr:8686','api_key':'private-key'}).call('GET','album/lookup',params={'term':'lidarr:example-id'})
         self.assertEqual(raised.exception.status_code,504)
@@ -66,7 +66,7 @@ class DiagnosticsTests(unittest.TestCase):
         from fastapi import HTTPException
         from harmonia.lidarr import Client
         response=Mock(status_code=500,ok=False,text='SkyHook lookup failed; api_key=private-key')
-        with patch('harmonia.lidarr.requests.request',return_value=response), patch('harmonia.api._record_log') as log:
+        with patch('harmonia.lidarr.network.request',return_value=response), patch('harmonia.api._record_log') as log:
             with self.assertRaises(HTTPException) as raised:
                 Client({'url':'http://lidarr:8686','api_key':'private-key'}).call('GET','album/lookup')
         self.assertIn('SkyHook lookup failed',raised.exception.detail)
@@ -93,7 +93,7 @@ class DiagnosticsTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             repo=Repository(Path(directory)/'bridge.sqlite')
             response=requests.Response();response.status_code=503;response._content=b'{"error":"Server busy"}'
-            with patch('harmonia.musicbrainz_client._session.get',return_value=response),patch('harmonia.api._record_log') as log:
+            with patch('harmonia.musicbrainz_client.network.get',return_value=response),patch('harmonia.api._record_log') as log:
                 from fastapi import HTTPException
                 with self.assertRaises(HTTPException):lidarr.musicbrainz_search(repo,{},lidarr.Lookup(title='Song',artist='Artist'))
                 self.assertTrue(any(c.args[0]=='INFO' and 'cache=miss' in c.args[2] for c in log.call_args_list))

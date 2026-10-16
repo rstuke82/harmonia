@@ -12,26 +12,26 @@ import test_30 as multi
 class Redirects(unittest.TestCase):
     def test_service_redirect_cannot_forward_plex_token(self):
         response=Mock(status_code=302,headers={'Location':'http://other/private'})
-        with patch.object(policy.requests,'get',return_value=response) as get:
+        with patch.object(policy.network,'get',return_value=response) as get:
             with self.assertRaises(HTTPException):policy.get('http://plex/image',headers={'X-Plex-Token':'SECRET'})
         self.assertEqual(get.call_count,1);self.assertFalse(get.call_args.kwargs['allow_redirects']);response.close.assert_called_once()
     def test_same_origin_redirect_retains_service_token(self):
         first=Mock(status_code=302,headers={'Location':'/new'});last=Mock(status_code=200)
-        with patch.object(policy.requests,'get',side_effect=[first,last]) as get:
+        with patch.object(policy.network,'get',side_effect=[first,last]) as get:
             self.assertIs(policy.get('http://plex/image',headers={'X-Plex-Token':'SECRET'}),last)
         self.assertEqual(get.call_args.args[0],'http://plex/new');self.assertEqual(get.call_args.kwargs['headers']['X-Plex-Token'],'SECRET');first.close.assert_called_once()
     def test_external_rejects_http_userinfo_and_private_or_mixed_dns(self):
         for url in ('http://external/image','https://user:pass@external/image'):
             with self.assertRaises(HTTPException):policy.external_get(url,{})
         for addresses in (['127.0.0.1'],['169.254.169.254'],['::1'],['8.8.8.8','10.0.0.1']):
-            with patch.object(policy.socket,'getaddrinfo',return_value=[(None,None,None,None,(ip,443)) for ip in addresses]),patch.object(policy.requests,'Session') as session:
+            with patch.object(policy.socket,'getaddrinfo',return_value=[(None,None,None,None,(ip,443)) for ip in addresses]),patch.object(policy,'Session') as session:
                 with self.assertRaises(HTTPException):policy.external_get('https://external/image',{})
                 session.assert_not_called()
     def test_external_pins_public_ip_verifies_original_tls_name_strips_credentials(self):
-        session=Mock();response=Mock(status_code=200);session.get.return_value=response
-        with patch.object(policy.socket,'getaddrinfo',return_value=[(None,None,None,None,('8.8.8.8',443))]),patch.object(policy.requests,'Session',return_value=session):
+        session=Mock(headers={},auth=None);response=Mock(status_code=200);session.request.return_value=response
+        with patch.object(policy.socket,'getaddrinfo',return_value=[(None,None,None,None,('8.8.8.8',443))]),patch.object(policy,'Session',return_value=session):
             self.assertIs(policy.external_get('https://external/image',{'X-Plex-Token':'SECRET','Authorization':'SECRET'}),response)
-        self.assertFalse(session.trust_env);headers=session.get.call_args.kwargs['headers'];self.assertNotIn('SECRET',str(headers));self.assertEqual(headers['Host'],'external')
+        self.assertFalse(session.trust_env);headers=session.request.call_args.kwargs['headers'];self.assertNotIn('SECRET',str(headers));self.assertEqual(headers['Host'],'external')
         adapter=session.mount.call_args.args[1]
         with patch.object(adapter.poolmanager,'connection_from_host') as connection:
             adapter.get_connection_with_tls_context(None,True)
@@ -39,7 +39,7 @@ class Redirects(unittest.TestCase):
         response.close();session.close.assert_called_once()
     def test_redirect_budget_closes_every_response(self):
         responses=[Mock(status_code=302,headers={'Location':'/next'}) for _ in range(4)]
-        with patch.object(policy.requests,'get',side_effect=responses) as get:
+        with patch.object(policy.network,'get',side_effect=responses) as get:
             with self.assertRaises(HTTPException):policy.get('http://plex/image')
         self.assertEqual(get.call_count,4)
         for response in responses:response.close.assert_called_once()

@@ -4,7 +4,7 @@ import uuid
 import hashlib
 import time
 import threading
-import requests
+from . import network
 from difflib import SequenceMatcher
 from fastapi import HTTPException, Query
 from pydantic import BaseModel, Field
@@ -56,10 +56,10 @@ def lastfm(method, refresh=False, **params):
         if not refresh and cache.get('expires', 0) > time.time():
             return cache['data']
         try:
-            response = requests.get('https://ws.audioscrobbler.com/2.0/', params={'method': method, 'api_key': key, 'format': 'json', **params}, timeout=(5, 15))
+            response = network.get('https://ws.audioscrobbler.com/2.0/', params={'method': method, 'api_key': key, 'format': 'json', **params}, timeout=(5, 15), _service="Last.fm")
             response.raise_for_status()
             data = response.json()
-        except (requests.RequestException, ValueError) as exc:
+        except (network.RequestException, ValueError) as exc:
             repo.add_log('ERROR', 'Last.fm', f'{method}: lookup failed ({type(exc).__name__})')
             raise HTTPException(503, 'Last.fm is temporarily unavailable. Try again later.') from exc
         if data.get('error'):
@@ -422,11 +422,12 @@ def album_association_key(artist,album):
 
 
 def availability(rows, apply_preferences=True, deduplicate=True):
+    if not rows:return []
     from .matching import Matcher
     from .config import Config
     from .library import cached_library,link_targets
     config=Config(read_only=True,namespaces=[])
-    model=cached_library();targets=link_targets()
+    model=cached_library();targets=link_targets(model)
     # All matching catalogs come from the unified Library. Underlying snapshot
     # metadata supplies scan freshness and queue status only.
     plex={**model['_plex'],'rows':[track for target in targets for track in target.get('plex_tracks',[])]}
@@ -454,7 +455,6 @@ def availability(rows, apply_preferences=True, deduplicate=True):
     base=lidarr_config(root_repository()).get('url','').rstrip('/')
     from .user_preferences import blocked, preferences
     prefs=preferences()
-    from .track_bridge import context as track_context
     bridge=model['_ctx'] if 'tracks' in lidarr else None
     plex_by_id={str(t['plex_id']):t for t in plex.get('rows',[])}
     album_links=root_repository().load_one('plex_album_links',bridge.get('scope',''),{}) if bridge else {}
@@ -462,6 +462,18 @@ def availability(rows, apply_preferences=True, deduplicate=True):
     from .accounts import personal_repository
     saved_links=personal_repository().load('lastfm_album_links')
     by_mbid={a.get('album_id'):a for a in lidarr.get('rows',[]) if a.get('album_id')}
+    # Resolve reusable account-owned evidence once, rather than per history album.
+    preference_repo=personal_repository()
+    artist_rules=list(preference_repo.load('blocked_artists').values()) if apply_preferences else []
+    album_rules=list(preference_repo.load('blocked_albums').values()) if apply_preferences else []
+    bridged_by_album={}
+    for track in (bridge or {}).get('tracks',[]):
+        pid=bridge['links'].get(str(track['id']),{}).get('plex_id')
+        if pid in plex_by_id:bridged_by_album.setdefault(track.get('album_id'),{})[pid]=plex_by_id[pid]
+    target_by_plex_album={}
+    for target in targets:
+        for track in target.get('plex_tracks',[]):
+            target_by_plex_album.setdefault(str(track.get('plex_album_id')),target)
     seen = set()
     result = []
     lidarr_enabled=bool(lidarr_config(root_repository()).get('enabled'))
@@ -469,7 +481,7 @@ def availability(rows, apply_preferences=True, deduplicate=True):
     fresh=bool(checked_at and time.time()-checked_at<86400)
     for row in rows:
         k = key(row['artist'], row['album'])
-        if (deduplicate and k in seen) or not all(k) or (apply_preferences and blocked(row)):
+        if (deduplicate and k in seen) or not all(k) or (apply_preferences and blocked(row,artist_rules=artist_rules,album_rules=album_rules)):
             continue
         seen.add(k)
         saved_link=saved_links.get(album_association_key(row['artist'],row['album']),{})
@@ -489,8 +501,7 @@ def availability(rows, apply_preferences=True, deduplicate=True):
             tracks=plex_groups[saved_link['target_id']]
         if lidarr_match:album=lidarr_match[0]['album']
         if album and bridge is not None:
-            ids={bridge['links'].get(str(t['id']),{}).get('plex_id') for t in bridge['tracks'] if t.get('album_id')==album.get('album_id')}
-            bridged=[plex_by_id[i] for i in ids if i in plex_by_id]
+            bridged=list(bridged_by_album.get(album.get('album_id'),{}).values())
             if bridged:tracks=bridged
         if album:
             saved_plex_id=str(album_links.get(str(album.get('album_id')),{}).get('plex_album_id') or '')
@@ -525,7 +536,7 @@ def availability(rows, apply_preferences=True, deduplicate=True):
         plex_url='https://app.plex.tv/desktop/#!/server/'+quote(str(machine),safe='')+'/details?key='+quote('/library/metadata/'+str(item),safe='') if machine and item else None
         lidarr_url=base+'/album/'+quote(str(album['album_id']),safe='') if actor() and actor().get('admin') and base and album and album.get('album_id') else None
         plex_art=('/api/library/plex-albums/'+str(first['plex_album_id'])+'/image?v='+__import__('hashlib').sha256(str(first.get('plex_album_thumb','')).encode()).hexdigest()[:16]) if first.get('plex_album_id') and first.get('plex_album_thumb') else row.get('artwork','')
-        selected_library=album or next((target for target in targets if target.get('plex_tracks') and str(target['plex_tracks'][0].get('plex_album_id'))==str(item)),None)
+        selected_library=album or target_by_plex_album.get(str(item))
         if selected_library:plex_art=selected_library.get('artwork') or plex_art
         result.append({**row,'artwork':plex_art,'history_key':row.get('history_key') or album_association_key(row['artist'],row['album']),'plex_url':plex_url,'plex_present':bool(tracks),'lidarr_url':lidarr_url,'availability':status,'availability_detail':explanation,'checked_at':checked_at or None,'lidarr_album_id':album.get('album_id') if album else None,'monitored':album.get('monitored') if album else None,'statistics':album.get('statistics',{}) if album else {},'releases':album.get('releases',[]) if album else [],'any_release_ok':album.get('anyReleaseOk') if album else None})
     return result
@@ -774,21 +785,20 @@ def register(app):
         if downloads and not (user.get('admin') or user.get('can_downloads') or user.get('can_manage_downloads')):
             raise HTTPException(403,'Download visibility is disabled for this account.')
         mine=requested_albums(user)
+        view_all=bool(user.get("admin") or user.get("can_view_all_requests"))
         with as_user(None):
             records=endpoint('/api/lidarr/requests').__wrapped__(compute_availability=False)
-        linked=availability([{'artist':r.get('artist',''),'album':r.get('title',''),'mbid':r.get('library_album_id') or r['key'],'request_key':r['key']} for r in records if user.get('admin') or r['key'] in mine],apply_preferences=False,deduplicate=False)
+        linked=availability([{'artist':r.get('artist',''),'album':r.get('title',''),'mbid':r.get('library_album_id') or r['key'],'request_key':r['key']} for r in records if view_all or r['key'] in mine],apply_preferences=False,deduplicate=False)
         by_id={r.get('request_key') or r.get('mbid'):r for r in linked}
         from .diagnostics import concise_error
         from .storage import read_json
         secrets=[config(root_repository()).get('api_key'),user.get('plex_token'),read_json(root_repository().directory/'config.json').get('plex',{}).get('token')]
         def safe_error(value):
-            text=str(value or '')
-            for secret in secrets:
-                if secret:text=text.replace(str(secret),'[REDACTED]')
-            return concise_error(text)
+            from .diagnostics import redact
+            return concise_error(redact(value or '', secrets=secrets))
         result=[]
         for r in records:
-            if not user.get('admin') and r['key'] not in mine:continue
+            if not view_all and r['key'] not in mine:continue
             info=by_id.get(r['key'],{})
             if user.get('admin'):
                 from .request_confirmation import apply
@@ -799,7 +809,7 @@ def register(app):
             fields=('plex_fully_available','download_error','download_poll_error','error','finalize_active','finalize_status','finalize_error','key','title','artist','status','active','sources','availability','availability_detail','availability_checked_at','plex_available','plex_checked_at','download_status','download_checked_at','created_at','updated_at','link_checked_at','lidarr_url','lidarr_home_url','lidarr_available','removed_from_lidarr','fulfilled_at','requesters','artwork','year','library_album_id','lidarr_album_mbid')
             value={k:r.get(k) for k in fields}
             if not user.get('admin'):
-                value['requesters']=[r for r in r.get('requesters',[]) if r.get('user_id')==user['id']]
+                if not view_all:value['requesters']=[r for r in r.get('requesters',[]) if r.get('user_id')==user['id']]
                 value['sources']=[]
             for field in ('download_error','download_poll_error','error','finalize_error'):
                 value[field]=safe_error(value.get(field))
@@ -812,8 +822,10 @@ def register(app):
                 value['lidarr_id']=r.get('lidarr_id')
             result.append(value)
         for key,r in root_repository().load('pending_requests').items():
-            if r['user_id']==user['id']:
-                result.append({'key':key,'album_id':r['album_id'],'title':r.get('title') or 'Album request','artist':r.get('artist'),'status':'approval','display_status':'Awaiting approval','created_at':r.get('at'),'artwork':'https://coverartarchive.org/release-group/'+str(r['album_id'])+'/front-500','requesters':[{'user_id':user['id'],'name':user.get('name') or 'Requester unavailable','avatar':user.get('avatar','')}],'sources':[{'title':r.get('title',''),'artist':r.get('artist','')}],'downloads':[]})
+            if view_all or r['user_id']==user['id']:
+                from .accounts import users
+                requester=users().get(str(r['user_id']),{})
+                result.append({'key':key,'album_id':r['album_id'],'title':r.get('title') or 'Album request','artist':r.get('artist'),'status':'approval','display_status':'Awaiting approval','created_at':r.get('at'),'artwork':'https://coverartarchive.org/release-group/'+str(r['album_id'])+'/front-500','requesters':[{'user_id':str(r['user_id']),'name':requester.get('name') or 'Requester unavailable','avatar':requester.get('avatar','')}],'sources':[{'title':r.get('title',''),'artist':r.get('artist','')}],'downloads':[]})
         return result
 
     @app.get('/api/requests-user')

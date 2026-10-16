@@ -1,4 +1,4 @@
-# Resolved from the published 20261011.6 Python 3.12 runtime (AMD64/ARM64).
+# Runtime dependencies resolved for Python 3.12 on AMD64 and ARM64.
 annotated-doc==0.0.5
 annotated-types==0.8.0
 anyio==4.15.1

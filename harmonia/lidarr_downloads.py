@@ -202,7 +202,7 @@ def snapshot(repo, cfg, force=False):
                     record['status']='search_completed' if command_status=='completed' else 'search_failed'
                     failure='' if command_status=='completed' else str(cmd.get('exception') or cmd.get('message') or command_status)
                     from .diagnostics import redact
-                    failure=redact(failure.replace(client.key,'[REDACTED]'))
+                    failure=redact(failure, secrets=(client.key,))
                     save(repo,key,_expected_webhook_at=record.get('webhook_checked_at'),status=record['status'],error=failure)
                     _record_log('INFO' if not failure else 'ERROR','Lidarr search',f"{record.get('title','')}: command {record['search_command_id']} {command_status} {failure}")
             album=album or albums.get(record['lidarr_id'])
@@ -213,8 +213,8 @@ def snapshot(repo, cfg, force=False):
                 _record_log('INFO','Lidarr download',f"{record.get('artist','')} — {record.get('title','')}: {status}")
             from .diagnostics import redact
             for q in matches:
-                q['error']=redact(q['error'].replace(client.key,'[REDACTED]'))
-                q['error_detail']=redact(q.get('error_detail','').replace(client.key,'[REDACTED]'))
+                q['error']=redact(q['error'], secrets=(client.key,))
+                q['error_detail']=redact(q.get('error_detail', ''), secrets=(client.key,))
             errors='; '.join(q['error'] for q in matches if q['error'])
             from .lidarr_request_events import preserve_failure, retry_identity_changes
             status,errors,webhook_failure=preserve_failure(record,matches,imported,status,errors)

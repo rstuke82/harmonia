@@ -12,7 +12,7 @@ from harmonia.metadata_sources import order
 
 class ArtworkAndEditions(unittest.TestCase):
     def setUp(self):
-        transport=patch('harmonia.redirect_policy.external_get',side_effect=lambda url,headers:__import__('requests').get(url,headers=headers,stream=True,timeout=(5,5),allow_redirects=False));transport.start();self.addCleanup(transport.stop)
+        transport=patch('harmonia.redirect_policy.external_get',side_effect=lambda url,headers:__import__('harmonia.network',fromlist=['get']).get(url,headers=headers,stream=True,timeout=(5,5),allow_redirects=False));transport.start();self.addCleanup(transport.stop)
         self.tmp=tempfile.TemporaryDirectory();self.addCleanup(self.tmp.cleanup)
         self.repo=Repository(Path(self.tmp.name));self.config=SimpleNamespace(repository=self.repo)
         self.track={'plex_album_id':'10','plex_artist_id':'20','plex_album_thumb':'/old-album','plex_artist_thumb':'/old-artist','plex_artist_art':'/old-art'}
@@ -33,7 +33,7 @@ class ArtworkAndEditions(unittest.TestCase):
         for target,ident,kind,rating,path_field,metadata_field,resource in [('album','group','cover','10','plex_album_thumb','thumb','posters'),('artist','1','portrait','20','plex_artist_thumb','thumb','posters'),('artist','1','hero','20','plex_artist_art','art','arts')]:
             with self.subTest(kind=kind):
                 responses=[self.response(content=self.image),self.response({'MediaContainer':{'Metadata':[{'ratingKey':'old'}]}}),self.response({'MediaContainer':{'Metadata':[{'ratingKey':'old'},{'ratingKey':'upload://new'}]}}),self.response({'MediaContainer':{'Metadata':[{'ratingKey':'upload://new','selected':True}]}}),self.response({'MediaContainer':{'Metadata':[{'ratingKey':rating,metadata_field:'/new-'+kind}]}})]
-                with patch('harmonia.library_inventory.indexed',return_value=self.data),patch('harmonia.api._health_plex',return_value=self.client),patch('harmonia.accounts.root_repository',return_value=self.repo),patch('harmonia.accounts.member_stores',return_value=[]),patch('harmonia.artwork_sync.requests.get',side_effect=responses),patch('harmonia.artwork_sync.requests.post',return_value=self.response()) as post,patch('harmonia.artwork_sync.requests.put',return_value=self.response()) as put:
+                with patch('harmonia.library_inventory.indexed',return_value=self.data),patch('harmonia.api._health_plex',return_value=self.client),patch('harmonia.accounts.root_repository',return_value=self.repo),patch('harmonia.accounts.member_stores',return_value=[]),patch('harmonia.artwork_sync.network.get',side_effect=responses),patch('harmonia.artwork_sync.network.post',return_value=self.response()) as post,patch('harmonia.artwork_sync.network.put',return_value=self.response()) as put:
                     result=artwork_sync.choose(self.config,target,ident,kind,'https://images/art.png','fanart')
                 self.assertEqual(result['status'],'synced');self.assertTrue(post.call_args.args[0].endswith('/'+resource))
                 self.assertEqual(post.call_args.kwargs['data'],self.image)
@@ -41,12 +41,12 @@ class ArtworkAndEditions(unittest.TestCase):
                 self.assertEqual(self.repo.load_one('inventory','plex')['rows'][0][path_field],'/new-'+kind)
     def test_failed_upload_does_not_save_choice(self):
         self.repo.save({'artwork_overrides':{'album:group:cover':{'url':'previous'}}})
-        with patch('harmonia.library_inventory.indexed',return_value=self.data),patch('harmonia.api._health_plex',return_value=self.client),patch('harmonia.artwork_sync.requests.get',side_effect=__import__('requests').ConnectionError()):
+        with patch('harmonia.library_inventory.indexed',return_value=self.data),patch('harmonia.api._health_plex',return_value=self.client),patch('harmonia.artwork_sync.network.get',side_effect=__import__('requests').ConnectionError()):
             with self.assertRaises(HTTPException):artwork_sync.choose(self.config,'album','group','cover','https://images/new.png','fanart')
         self.assertEqual(self.repo.load_one('artwork_overrides','album:group:cover')['url'],'previous')
     def test_unlinked_choice_waits_without_network(self):
         self.data['plex_album_names']={}
-        with patch('harmonia.library_inventory.indexed',return_value=self.data),patch('harmonia.accounts.root_repository',return_value=self.repo),patch('harmonia.artwork_sync.requests.get') as get:
+        with patch('harmonia.library_inventory.indexed',return_value=self.data),patch('harmonia.accounts.root_repository',return_value=self.repo),patch('harmonia.artwork_sync.network.get') as get:
             result=artwork_sync.choose(self.config,'album','group','cover','https://images/new.png','fanart')
         get.assert_not_called();self.assertEqual(result['status'],'pending')
     def test_release_issue_only_when_better_preference_available(self):

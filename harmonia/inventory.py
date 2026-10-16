@@ -116,8 +116,7 @@ def scan(service, force=False):
     return {'summary':summary,'count':result['count'],'seconds':result['seconds'],'reconciliation':reconciliation,'partial_success':bool(failed)}
 
 def current(repo,config):
-    from .accounts import actor, as_user, root_repository
-    from .api import _health_plex
+    from .accounts import root_repository
     from .lidarr import config as lidarr_config
     from .lidarr_requests import server_id
     from types import SimpleNamespace

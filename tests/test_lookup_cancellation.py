@@ -30,7 +30,7 @@ class LookupCancellation(unittest.TestCase):
   def run():
    try:musicbrainz_client._request('https://musicbrainz.org','recording',{},True,(1,1))
    except Exception as e:errors.append(e)
-  with patch.object(musicbrainz_client._session,'get',side_effect=slow),patch.object(musicbrainz_client,'_public_last',0):
+  with patch.object(musicbrainz_client.network,'get',side_effect=slow),patch.object(musicbrainz_client,'_public_last',0):
    thread=threading.Thread(target=run);thread.start()
    try:
     self.assertTrue(started.wait(2))
@@ -41,7 +41,7 @@ class LookupCancellation(unittest.TestCase):
   self.assertEqual(errors,[])
  def test_cancel_during_network_discards_response(self):
   ctx=Mock();ctx.checkpoint.side_effect=[None,jobs.Cancelled()]
-  with patch('harmonia.jobs.current',return_value=ctx),patch.object(musicbrainz_client._session,'get',return_value=Mock(json=lambda:{'late':True})):
+  with patch('harmonia.jobs.current',return_value=ctx),patch.object(musicbrainz_client.network,'get',return_value=Mock(json=lambda:{'late':True})):
    with self.assertRaises(jobs.Cancelled):musicbrainz_client._request('http://mirror','recording',{},False,(1,1))
  def test_own_releases_first_and_studio_before_live(self):
   rows=[{'title':'Compilation','type':'Album','other_release':True,'secondary_types':['Compilation']},{'title':'Single','type':'Single','other_release':False},{'title':'Studio','type':'Album','other_release':False},{'title':'Live','type':'Album','other_release':True,'secondary_types':['Live']}]

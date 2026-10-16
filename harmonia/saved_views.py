@@ -23,13 +23,18 @@ DISCOVER |= LIBRARY
 REQUESTS=DISCOVER|{'lidarr_requests','user_requests','request_jobs','pending_requests'}
 
 def permissions(user):
-    values={k:(user or {}).get(k) for k in ('admin','owner','can_request','can_downloads','can_manage_downloads','can_playlists','can_library_issues','disabled')}
+    values={k:(user or {}).get(k) for k in ('admin','owner','can_request','can_view_all_requests','can_downloads','can_manage_downloads','can_playlists','can_library_issues','disabled')}
     values['projection_scope']='server' if not user or user.get('server_context') else 'account'
     return json.dumps(values,sort_keys=True)
 
 def revision(repo,deps):
     result=['library-artwork-fallback-v1'] if 'artwork_overrides' in deps else []
-    for source in dict.fromkeys((repo,root_repository())):
+    sources=[repo,root_repository()]
+    if 'all_account_missing' in deps:
+        from .storage import get_repository
+        sources.extend(get_repository(root_repository().directory/'users'/str(int(uid)))
+                       for uid,u in users().items() if not u.get('disabled') and not u.get('pending_login') and not u.get('owner',u.get('admin',False)))
+    for source in dict.fromkeys(sources):
         with source.connect() as db:
             rows=db.execute('SELECT namespace,generation FROM state_revisions WHERE namespace IN ('+','.join('?' for _ in deps)+') ORDER BY namespace',tuple(deps)).fetchall()
         from .metadata_refresh import stable_generations
@@ -106,6 +111,7 @@ def saved(name,deps=COMMON,enabled=None):
             priority=2 if _warming.get() else 0 if row['data'] is None or force else 1
             job_id=enqueue(repo,row,stamp,force,priority=priority) if stale or force else row['job_id']
             headers={'X-Saved-View':key,'X-Saved-View-Updated':str(row['updated_at'] or 0),'X-Saved-View-Stale':str(bool(stale or force)).lower(),'Server-Timing':f'saved-db;dur={(time.monotonic()-started)*1000:.1f}'}
+            if job_id and (stale or force):headers['X-Saved-View-Job']=str(job_id)
             if row['data'] is None:
                 if row['error'] and row['attempt_revision']==stamp and not force:
                     return JSONResponse({'detail':'Could not prepare this saved view. Refresh to retry; see Activity for details.'},status_code=503,headers=headers)
@@ -133,7 +139,10 @@ def execute(payload):
     with as_user(user):
         if str(personal_repository().directory)!=str(repo.directory):
             return {'summary':'Saved view repository scope changed; view discarded.'}
-        stamp=revision(repo,deps);started=time.monotonic();progress('Preparing saved '+row['name'])
+        stamp=revision(repo,deps);started=time.monotonic()
+        import re
+        label=re.sub(r' v[0-9_]+$','',row['name'])
+        progress('Preparing '+label+'…')
         try:
             data=fn(**json.loads(row['params']))
             encoded=json.dumps(data,ensure_ascii=False)

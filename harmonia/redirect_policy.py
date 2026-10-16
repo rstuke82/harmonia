@@ -2,7 +2,8 @@
 import ipaddress
 import socket
 from urllib.parse import urlsplit,urljoin
-import requests
+from requests import Session
+from . import network
 from requests.adapters import HTTPAdapter
 from fastapi import HTTPException
 
@@ -31,12 +32,12 @@ def external_get(url,headers):
     except OSError:raise HTTPException(502,'Could not resolve the artwork host.') from None
     if not addresses or any(not ipaddress.ip_address(address).is_global for address in addresses):
         raise HTTPException(422,'External artwork must use a public internet address.')
-    session=requests.Session();session.trust_env=False
+    session=Session();session.trust_env=False
     session.mount('https://',PinnedHTTPS(sorted(addresses)[0],host,port))
     # Never forward caller service credentials to artwork origins.
     safe={'User-Agent':'Harmonia','Host':host if port==443 else f'{host}:{port}'}
     try:
-        response=session.get(url,headers=safe,stream=True,timeout=(5,5),allow_redirects=False)
+        response=network.get(url,headers=safe,stream=True,timeout=(5,5),allow_redirects=False, _session=session, _log_body=False)
     except Exception:session.close();raise
     close=response.close
     def cleanup():
@@ -53,7 +54,7 @@ def get(url,headers=None,external=False):
             response=external_get(url,headers)
         else:
             if origin(url)!=initial:raise HTTPException(502,'Plex image redirect to another origin was blocked.')
-            response=requests.get(url,headers=headers,stream=True,timeout=(5,5),allow_redirects=False)
+            response=network.get(url,headers=headers,stream=True,timeout=(5,5),allow_redirects=False, _service="Plex artwork", _log_body=False)
         if response.status_code not in (301,302,303,307,308):return response
         location=response.headers.get('Location','');response.close()
         if not location:raise HTTPException(502,'Image redirect is missing its destination.')

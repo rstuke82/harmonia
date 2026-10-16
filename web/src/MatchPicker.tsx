@@ -5,8 +5,8 @@ import { api, Candidate, MissingTrack, Playlist } from './api'
 import Modal from './Modal'
 import SongPreview from './SongPreview'
 
-export default function MatchPicker({track,playlistKey,onClose,onSave}:{
-  track: Pick<MissingTrack,'title'|'artist'|'album'|'duration'>; playlistKey?:string;
+export default function MatchPicker({track,playlistKey,userId,onClose,onSave}:{
+  track: Pick<MissingTrack,'title'|'artist'|'album'|'duration'>; playlistKey?:string; userId?:string;
   onClose:()=>void; onSave:(candidate:Candidate,keys?:string[],provenance?:string)=>Promise<void>
 }) {
   const [candidates,setCandidates]=useState<Candidate[]>([])
@@ -27,7 +27,7 @@ export default function MatchPicker({track,playlistKey,onClose,onSave}:{
   closeRef.current=onClose
   useEffect(()=>{
     let active=true
-    api.playlists().then(p=>{if(active)setPlaylists(p)}).catch(()=>{})
+    api.playlists(userId).then(p=>{if(active)setPlaylists(p)}).catch(()=>{})
     retryAutomatic()
     return ()=>{active=false;generation.current++}
   },[])
@@ -35,17 +35,17 @@ export default function MatchPicker({track,playlistKey,onClose,onSave}:{
     const id=++generation.current
     setLoading(true)
     try{
-      const result=await api.automatic(track)
+      const result=await api.automatic(track,userId)
       if(id!==generation.current)return
       setAutomatic(result.candidate)
-      if(result.candidate){setChoice(result.candidate);setProvenance('automatic');const rows=await api.candidates({...track,query:''});if(id===generation.current)setCandidates([result.candidate,...rows.filter(c=>c.plex_id!==result.candidate.plex_id)])}else{await search('')}
+      if(result.candidate){setChoice(result.candidate);setProvenance('automatic');const rows=await api.candidates({...track,query:''},userId);if(id===generation.current)setCandidates([result.candidate,...rows.filter(c=>c.plex_id!==result.candidate.plex_id)])}else{await search('')}
     }catch(e:any){if(id===generation.current){setError(e.message)}}
     finally{if(id===generation.current)setLoading(false)}
   }
   async function search(text:string){
     const id=++generation.current
     setLoading(true);setError('');setChoice(null);setProvenance('manual')
-    try{const rows=await api.candidates({...track,query:text});if(id===generation.current)setCandidates(rows)}
+    try{const rows=await api.candidates({...track,query:text},userId);if(id===generation.current)setCandidates(rows)}
     catch(e:any){if(id===generation.current){setError(e.message);setCandidates([])}}
     finally{if(id===generation.current)setLoading(false)}
   }

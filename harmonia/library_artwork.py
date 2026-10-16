@@ -3,7 +3,7 @@ import hashlib
 import json
 import re
 from urllib.parse import quote,urlsplit
-import requests
+from . import network
 from fastapi import HTTPException,Response
 
 def url(album_id,candidates,selected_at=None,target='albums',kind=''):
@@ -33,10 +33,10 @@ def serve(config,candidates,external_only=False):
         if not source.startswith(('https://','http://')):continue
         try:
             response=download(source,max_bytes=20*1024*1024,oversized_status=502,external=True)
-        except requests.HTTPError as exc:
+        except network.HTTPError as exc:
             if exc.response is not None and exc.response.status_code in (404,410):continue
             raise HTTPException(502,'Artwork source temporarily unavailable',headers={'Retry-After':'2'}) from None
-        except requests.RequestException:
+        except network.RequestException:
             raise HTTPException(502,'Artwork source temporarily unavailable',headers={'Retry-After':'2'}) from None
         media_type=response.headers.get('Content-Type','').split(';',1)[0].lower()
         if not media_type.startswith('image/') or media_type=='image/svg+xml':

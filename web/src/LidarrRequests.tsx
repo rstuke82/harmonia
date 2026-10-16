@@ -13,11 +13,11 @@ import Modal from './Modal'
 import {AddLidarrAlbum} from './Lidarr'
 
 type Download={queue_id:number;download_id:string;title:string;status:string;percent:number|null;remaining?:number;error?:string;error_detail?:string}
-type Request={availability_source?:string;availability_checked_at?:number;availability?:string;availability_detail?:string;plex_available?:boolean;plex_checked_at?:number;key:string;library_album_id?:string;lidarr_album_mbid?:string;artwork?:string;year?:string|number;title:string;artist?:string;status:string;active:boolean;finalize_active?:boolean;finalize_status?:string;finalize_error?:string;lidarr_id?:number;error?:string;sources:{title:string;artist:string}[];downloads?:Download[];download_status?:string;download_error?:string;download_poll_error?:string;download_checked_at?:number;created_at?:number;updated_at?:number;link_checked_at?:number;lidarr_url?:string;lidarr_home_url?:string;lidarr_available?:boolean;removed_from_lidarr?:boolean;fulfilled_at?:number;requesters?:{name?:string;avatar?:string;requested_at?:number;status?:string}[]}
+type Request={availability_source?:string;availability_checked_at?:number;availability?:string;availability_detail?:string;plex_available?:boolean;plex_checked_at?:number;key:string;library_album_id?:string;lidarr_album_mbid?:string;artwork?:string;year?:string|number;title:string;artist?:string;status:string;active:boolean;finalize_active?:boolean;finalize_status?:string;finalize_error?:string;lidarr_id?:number;error?:string;sources:{title:string;artist:string}[];downloads?:Download[];download_status?:string;download_error?:string;download_poll_error?:string;download_checked_at?:number;created_at?:number;updated_at?:number;link_checked_at?:number;lidarr_url?:string;lidarr_home_url?:string;lidarr_available?:boolean;removed_from_lidarr?:boolean;fulfilled_at?:number;requesters?:{user_id?:string;name?:string;avatar?:string;requested_at?:number;status?:string}[]}
 let rows:Request[]=[]
 let inflight:Promise<void>|null=null
 let accountScope=''
-function scopeFor(){const user=getAccount();return JSON.stringify([user?.id,user?.admin,user?.can_downloads,user?.can_manage_downloads,user?.lidarr_enabled])}
+function scopeFor(){const user=getAccount();return JSON.stringify([user?.id,user?.admin,user?.can_view_all_requests,user?.can_downloads,user?.can_manage_downloads,user?.lidarr_enabled])}
 function ensureScope(){const scope=scopeFor();if(scope!==accountScope){accountScope=scope;rows=[];inflight=null;loaded=false;loadError=''}return scope}
 let loadError='',loaded=false
 const listeners=new Set<()=>void>(),notify=()=>listeners.forEach(f=>f())
@@ -45,7 +45,7 @@ const when=(value:number)=>value?new Date(value*1000).toLocaleString():'Unknown'
 function rememberRequestReturn(){try{sessionStorage.setItem('harmonia-requests-scroll',String(window.scrollY))}catch{}}
 
 function DownloadCard({record:r,focused}:{record:Request;focused:boolean}){
- const account=getAccount(),canManage=account?.admin||account?.can_manage_downloads
+ const account=getAccount(),canManage=account?.admin||(account?.can_manage_downloads&&r.requesters?.some(v=>v.user_id===account?.id))
  const [confirm,setConfirm]=useState<{action:string;download:Download}|null>(null),[busy,setBusy]=useState(false),[error,setError]=useState(''),[message,setMessage]=useState(''),[jobId,setJobId]=useState(''),[adding,setAdding]=useState(false)
  const submitting=useRef(false),element=useRef<HTMLElement>(null)
  useEffect(()=>{if(focused)element.current?.scrollIntoView({block:'center'})},[focused])

@@ -32,7 +32,7 @@ class ArtworkLinkFix(unittest.TestCase):
     def test_changed_link_changes_candidate_and_preserves_selected_cover(self):
         put, reset, choices = self.routes()
         self.repo.save({'artwork_overrides':{'album:'+fixtures.ALBUM+':cover':{'url':'https://saved.example/cover.jpg','provider':'manual'}}})
-        with accounts.as_user(self.user), patch('harmonia.fanart.lookup', return_value={}), patch.object(album_apple_artwork.requests, 'get', return_value=self.response()) as get:
+        with accounts.as_user(self.user), patch('harmonia.fanart.lookup', return_value={}), patch.object(album_apple_artwork.network, 'get', return_value=self.response()) as get:
             put(fixtures.ALBUM, SimpleNamespace(provider='apple', url='https://music.apple.com/gb/album/new/123'))
             selected = self.repo.load_one('artwork_overrides','album:'+fixtures.ALBUM+':cover')
             self.assertEqual(selected['url'], 'https://saved.example/cover.jpg')
@@ -53,13 +53,13 @@ class ArtworkLinkFix(unittest.TestCase):
     def test_failed_lookup_suppresses_old_candidate_and_reports_retry(self):
         put, _, choices=self.routes()
         import requests
-        with accounts.as_user(self.user), patch('harmonia.fanart.lookup',return_value={}), patch.object(album_apple_artwork.requests,'get',side_effect=requests.ConnectionError()):
+        with accounts.as_user(self.user), patch('harmonia.fanart.lookup',return_value={}), patch.object(album_apple_artwork.network,'get',side_effect=requests.ConnectionError()):
             result=put(fixtures.ALBUM,SimpleNamespace(provider='apple',url='https://music.apple.com/us/album/new/123'))
             self.assertIn('retry',result['apple']['artwork_message'])
             result=choices('album',fixtures.ALBUM,'cover')
             self.assertFalse(any(r['provider']=='apple' for r in result['candidates']))
             self.assertIn('retry',result['apple_message'])
-        with accounts.as_user(self.user), patch.object(album_apple_artwork.requests,'get',return_value=self.response()):
+        with accounts.as_user(self.user), patch.object(album_apple_artwork.network,'get',return_value=self.response()):
             put(fixtures.ALBUM,SimpleNamespace(provider='apple',url='https://music.apple.com/us/album/new/123'))
             self.assertTrue(album_apple_artwork.artwork(self.repo,fixtures.ALBUM))
 
@@ -72,7 +72,7 @@ class ArtworkLinkFix(unittest.TestCase):
 
     def test_wrong_album_response_and_redirect_are_not_used(self):
         for response in (self.response(999), Mock(status_code=302)):
-            with patch.object(album_apple_artwork.requests,'get',return_value=response) as get:
+            with patch.object(album_apple_artwork.network,'get',return_value=response) as get:
                 result=album_apple_artwork.refresh(self.repo,fixtures.ALBUM,'https://music.apple.com/us/album/new/123')
                 self.assertEqual(result['artwork'],''); self.assertTrue(result['message'])
                 self.assertEqual(get.call_count,1)
@@ -82,7 +82,7 @@ class ArtworkLinkFix(unittest.TestCase):
         app=FastAPI();library.register(app)
         refresh=next(r.endpoint for r in app.routes if r.path=='/api/library/albums/{album_id}/artwork/apple/refresh')
         self.repo.save({'library_album_service_links':{fixtures.ALBUM:{'apple':'https://music.apple.com/gb/album/new/123'}}})
-        with accounts.as_user(self.user),patch('harmonia.fanart.lookup',return_value={}),patch.object(album_apple_artwork.requests,'get',return_value=self.response()) as get:
+        with accounts.as_user(self.user),patch('harmonia.fanart.lookup',return_value={}),patch.object(album_apple_artwork.network,'get',return_value=self.response()) as get:
             before=choices('album',fixtures.ALBUM,'cover')
             self.assertTrue(before['apple_refresh_required']);get.assert_not_called()
             refresh(fixtures.ALBUM)
@@ -115,7 +115,7 @@ class ArtworkLinkFix(unittest.TestCase):
         response=Mock(status_code=200,json=lambda:{'resultCount':1,'results':[
             {'wrapperType':'collection','collectionType':'Album','collectionId':1755466686,
              'artistName':'311','collectionName':'Grassroots (30th Anniversary Edition)','artworkUrl100':image}]})
-        with patch.object(album_apple_artwork.requests,'get',return_value=response) as get:
+        with patch.object(album_apple_artwork.network,'get',return_value=response) as get:
             result=album_apple_artwork.refresh(self.repo,fixtures.ALBUM,url)
         self.assertEqual(result['artwork'],image.replace('100x100bb','1200x1200bb'))
         self.assertEqual(result['message'],'')

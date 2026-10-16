@@ -216,8 +216,6 @@ def execute_lidarr_webhook(payload):
     """Process a trusted, reduced webhook envelope on the library worker."""
     from .accounts import root_repository
     from .lidarr_catalog import refresh
-    from .lidarr import Client,config as lidarr_config
-    from .lidarr_requests import server_id
     from . import jobs
     detail=payload.get('detail',{});event=payload.get('event','')
     if event=='catalog_batch':

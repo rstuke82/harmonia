@@ -9,7 +9,7 @@ from typing import Optional
 from typing import Tuple
 from fuzzywuzzy import fuzz
 import re
-from . import network as requests
+from . import network
 from urllib.parse import urlparse
 from .matching import Matcher
 from .runtime_output import print
@@ -57,7 +57,7 @@ class PlexAPI:
     def _get_machine_identifier(self) -> str:
         """Get Plex server machine identifier."""
         try:
-            resp = requests.get(
+            resp = network.get(
                 f"{self.base_url}/identity",
                 headers=self.headers,
                 timeout=10,
@@ -85,7 +85,7 @@ class PlexAPI:
 
             return identifier
 
-        except requests.RequestException as e:
+        except network.RequestException as e:
             if self.strict_errors:
                 raise
             raise Exception(
@@ -118,7 +118,7 @@ class PlexAPI:
     def _fetch_library(self):
 
         try:
-            resp = requests.get(
+            resp = network.get(
                 f"{self.base_url}/library/sections/"
                 f"{self.music_library_key}/all",
                 headers=self.headers,
@@ -151,13 +151,13 @@ class PlexAPI:
             if not rows:
                 return rows
             # Album dates come from Plex album metadata, not track imports.
-            albums_response = requests.get(
+            albums_response = network.get(
                 f"{self.base_url}/library/sections/{self.music_library_key}/all",
                 headers=self.headers, params={"type": 9}, timeout=30,
              allow_redirects=False)
             albums_response.raise_for_status()
             albums = {str(a.get("ratingKey")): a for a in albums_response.json().get("MediaContainer", {}).get("Metadata", [])}
-            artists_response = requests.get(
+            artists_response = network.get(
                 f"{self.base_url}/library/sections/{self.music_library_key}/all",
                 headers=self.headers, params={"type": 8}, timeout=30,
              allow_redirects=False)
@@ -223,7 +223,7 @@ class PlexAPI:
     def refresh_library_path(self, path: str = ""):
         """Ask Plex to refresh one mapped folder without rescanning Harmonia's inventory."""
         params = {"path": path} if path else {}
-        response = requests.get(
+        response = network.get(
             f"{self.base_url}/library/sections/{self.music_library_key}/refresh",
             headers=self.headers,
             params=params,
@@ -233,7 +233,7 @@ class PlexAPI:
 
     def search_library_subset(self, query: str) -> List[dict]:
         """Find albums by title, then fetch their complete track lists."""
-        response = requests.get(
+        response = network.get(
             f"{self.base_url}/library/sections/{self.music_library_key}/search",
             headers=self.headers, params={"type": 9, "query": query}, timeout=(5, 20),
          allow_redirects=False)
@@ -249,7 +249,7 @@ class PlexAPI:
             if album.get("type") != "album" or not key.isdigit():
                 continue
             for page in range(100):
-                child = requests.get(
+                child = network.get(
                     f"{self.base_url}/library/metadata/{key}/children",
                     headers=self.headers,
                     params={"includeGuids": 1, "X-Plex-Container-Start": page * 200,
@@ -277,7 +277,7 @@ class PlexAPI:
     ) -> List[dict]:
         """Search artists only inside the configured Plex music library."""
         try:
-            resp = requests.get(
+            resp = network.get(
                 f"{self.base_url}/library/sections/"
                 f"{self.music_library_key}/all",
                 headers=self.headers,
@@ -385,7 +385,7 @@ class PlexAPI:
         """
 
         try:
-            resp = requests.get(
+            resp = network.get(
                 f"{self.base_url}/playlists",
                 headers=self.headers,
                 timeout=15,
@@ -462,7 +462,7 @@ class PlexAPI:
         """Get playlist details."""
 
         try:
-            resp = requests.get(
+            resp = network.get(
                 f"{self.base_url}/playlists/{playlist_id}",
                 headers=self.headers,
                 timeout=10,
@@ -495,7 +495,7 @@ class PlexAPI:
         """
 
         try:
-            resp = requests.get(
+            resp = network.get(
                 f"{self.base_url}/playlists/{playlist_id}/items",
                 headers=self.headers,
                 timeout=15,
@@ -526,7 +526,7 @@ class PlexAPI:
             container = resp.json().get('MediaContainer', {})
             total = int(container.get('totalSize', container.get('size', len(items))))
             while len(items) < total:
-                page = requests.get(f'{self.base_url}/playlists/{playlist_id}/items',
+                page = network.get(f'{self.base_url}/playlists/{playlist_id}/items',
                     headers=self.headers, params={'X-Plex-Container-Start':len(items), 'X-Plex-Container-Size':1000},
                     timeout=15, allow_redirects=False)
                 page.raise_for_status()
@@ -558,7 +558,7 @@ class PlexAPI:
     ) -> Optional[int]:
         """Return the current Plex playlist item count, or None on failure."""
         try:
-            resp = requests.get(
+            resp = network.get(
                 f"{self.base_url}/playlists/{playlist_id}/items",
                 headers=self.headers,
                 timeout=15,
@@ -611,7 +611,7 @@ class PlexAPI:
         try:
             uri = self._library_uri(first_track_plex_id)
 
-            resp = requests.post(
+            resp = network.post(
                 f"{self.base_url}/playlists",
                 headers=self.headers,
                 params={
@@ -666,7 +666,7 @@ class PlexAPI:
 
             return str(playlist_id)
 
-        except requests.RequestException as e:
+        except network.RequestException as e:
             print(f"Error creating playlist: {e}")
             return None
         except Exception as e:
@@ -681,7 +681,7 @@ class PlexAPI:
         try:
             uri = self._library_uri(track_plex_id)
 
-            resp = requests.put(
+            resp = network.put(
                 f"{self.base_url}/playlists/{playlist_id}/items",
                 headers=self.headers,
                 params={"uri": uri},
@@ -808,7 +808,7 @@ class PlexAPI:
         headers={**self.headers,'X-Plex-Client-Identifier':'Harmonia-sync'}
         def create(values):
             uri='library:///directory/'+quote_plus('/library/metadata/'+','.join(values))
-            response=requests.post(f'{self.base_url}/playQueues',headers=headers,
+            response=network.post(f'{self.base_url}/playQueues',headers=headers,
                 params={'type':'audio','uri':uri,'shuffle':0,'repeat':0,'continuous':0,
                         'includeRelated':0,'window':len(ids)},timeout=15,allow_redirects=False)
             response.raise_for_status()
@@ -824,7 +824,7 @@ class PlexAPI:
             # Creation/mutation responses may contain only a window. Fetch a
             # full window; never infer completeness from HTTP 200 alone.
             if len(rows)!=len(ids) or (total is not None and int(total)!=len(rows)):
-                response=requests.get(f'{self.base_url}/playQueues/{queue_id}',headers=headers,
+                response=network.get(f'{self.base_url}/playQueues/{queue_id}',headers=headers,
                     params={'own':0,'window':len(ids),'includeBefore':1,'includeAfter':1},
                     timeout=15,allow_redirects=False)
                 response.raise_for_status()
@@ -847,7 +847,7 @@ class PlexAPI:
             raise ValueError('Plex did not confirm the first queue occurrence')
         for index,value in enumerate(ids[1:],2):
             jobs.progress(f'Preparing Plex queue · occurrence {index} of {len(ids)}',check=False,completed=index,total=len(ids))
-            response=requests.put(f'{self.base_url}/playQueues/{queue_id}',headers=headers,
+            response=network.put(f'{self.base_url}/playQueues/{queue_id}',headers=headers,
                 params={'uri':self._library_uri(value)},timeout=15,allow_redirects=False)
             response.raise_for_status()
             container=response.json().get('MediaContainer',{})
@@ -876,14 +876,11 @@ class PlexAPI:
                 queue_id=self._confirmed_play_queue(ids)
             except Exception as exc:
                 from .diagnostics import redact
-                from . import network
                 if isinstance(exc,network.exceptions.RequestException):
                     response=getattr(exc,'response',None)
                     detail=f'Plex queue request failed (HTTP {response.status_code})' if response is not None else 'Plex queue request failed or timed out'
                 else:detail=str(exc)
-                for secret in self.headers.values():
-                    if secret and len(str(secret))>12:detail=detail.replace(str(secret),'[REDACTED]')
-                jobs.output('Plex repeated-track queue unavailable; destination left unchanged. '+redact(detail))
+                jobs.output('Plex repeated-track queue unavailable; destination left unchanged. '+redact(detail, secrets=self.headers.values()))
                 return False
         prefix = 0
         if not individual and queue_id is None and len(set(ids)) == len(ids) and len(set(current_ids)) == len(current_ids):
@@ -903,7 +900,7 @@ class PlexAPI:
                 print('✗ Could not clear the destination playlist; stopping this update.')
                 return False
         if queue_id:
-            response = requests.put(f'{self.base_url}/playlists/{playlist_id}/items', headers=self.headers,
+            response = network.put(f'{self.base_url}/playlists/{playlist_id}/items', headers=self.headers,
                 params={'playQueueID':queue_id}, timeout=15, allow_redirects=False)
             if response.status_code in (200, 201):
                 print(f'✓ Submitted {len(ids)} ordered occurrences from the play queue')
@@ -930,7 +927,7 @@ class PlexAPI:
         """
 
         try:
-            resp = requests.delete(
+            resp = network.delete(
                 f"{self.base_url}/playlists/{playlist_id}/items/"
                 f"{playlist_item_id}",
                 headers=self.headers,
@@ -1006,7 +1003,7 @@ class PlexAPI:
                 "summary": clean_description,
             }
 
-            resp = requests.put(
+            resp = network.put(
                 f"{self.base_url}/playlists/{playlist_id}",
                 headers=self.headers,
                 params=params,
@@ -1293,7 +1290,7 @@ class PlexAPI:
             1,
         ):
             try:
-                image_resp = requests.get(
+                image_resp = network.get(
                     candidate_url,
                     headers={
                         "User-Agent": (
@@ -1426,7 +1423,7 @@ class PlexAPI:
                         )
                         continue
 
-                upload_resp = requests.post(
+                upload_resp = network.post(
                     f"{self.base_url}/library/metadata/"
                     f"{playlist_id}/posters",
                     headers={
@@ -1454,11 +1451,11 @@ class PlexAPI:
                     f"{upload_resp.status_code}"
                 )
 
-            except requests.exceptions.Timeout:
+            except network.exceptions.Timeout:
                 last_error = (
                     f"artwork variant {index} timed out"
                 )
-            except requests.exceptions.RequestException as e:
+            except network.exceptions.RequestException as e:
                 last_error = (
                     f"artwork variant {index} request error: {e}"
                 )
@@ -1496,7 +1493,7 @@ class PlexAPI:
                 )
 
                 try:
-                    upload_resp = requests.post(
+                    upload_resp = network.post(
                         f"{self.base_url}/library/metadata/"
                         f"{playlist_id}/posters",
                         headers={
@@ -1524,12 +1521,12 @@ class PlexAPI:
                         f"HTTP {upload_resp.status_code}"
                     )
 
-                except requests.exceptions.Timeout:
+                except network.exceptions.Timeout:
                     last_error = (
                         "center-cropped Plex poster upload "
                         "timed out"
                     )
-                except requests.exceptions.RequestException as e:
+                except network.exceptions.RequestException as e:
                     last_error = (
                         "center-cropped Plex poster upload "
                         f"request error: {e}"

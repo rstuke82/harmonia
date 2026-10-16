@@ -57,7 +57,7 @@ def register(app):
     from .accounts import personal_repository,actor
     from .api import job_store
     from .config import Config
-    from .lidarr import state_put,config as lidarr_config
+    from .lidarr import config as lidarr_config
     from .lidarr_requests import server_id
     from .inventory import snapshot
     def playlist(key):

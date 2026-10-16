@@ -81,7 +81,7 @@ def fingerprint(config, rows):
 
 
 def preview(request):
-    from .api import _config, _health_plex
+    from .api import _config
     from .matching import Matcher
     config=_config(read_only=True,namespaces=['health','source_snapshots','mapping','match_metadata','missing','ignored_tracks','artist_aliases'])
     track=request.model_dump(include={'title','artist','album'})
@@ -116,7 +116,7 @@ def preview(request):
 
 
 def apply_preview(preview_id):
-    from .api import _config, _playlist_key, _capture, _health_plex
+    from .api import _config, _playlist_key, _capture
     from .process_lock import ProcessLock
     from .sync_engine import Syncer
     from . import jobs

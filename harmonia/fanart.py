@@ -3,7 +3,7 @@ import time
 import uuid
 from urllib.parse import urlsplit
 
-import requests
+from . import network
 from fastapi import HTTPException
 from pydantic import BaseModel, Field
 
@@ -44,12 +44,12 @@ def lookup(repo,kind,mbid,force=False):
     if keys['client_key']:headers['client-key']=keys['client_key']
     path='/music/'+identifier if kind=='artist' else '/music/albums/'+identifier
     try:
-        response=requests.get(BASE_URL+path,headers=headers,timeout=(5,25),allow_redirects=False)
+        response=network.get(BASE_URL+path,headers=headers,timeout=(5,25),allow_redirects=False)
         if response.status_code==404:data={}
         else:
             response.raise_for_status();data=response.json()
             if not isinstance(data,dict):raise ValueError('Fanart.tv returned an unexpected response.')
-    except (requests.RequestException,ValueError) as exc:
+    except (network.RequestException,ValueError) as exc:
         status=getattr(getattr(exc,'response',None),'status_code',None)
         detail='Fanart.tv could not complete the artwork lookup.'+(f' HTTP {status}.' if status else ' Check the API key and network connection.')
         repo.add_log('ERROR','Fanart.tv',f'{kind} lookup failed'+(f' with HTTP {status}' if status else f' ({type(exc).__name__})'))

@@ -17,7 +17,7 @@ class FanartTests(unittest.TestCase):
 
     def test_artist_lookup_uses_direct_api_and_keeps_keys_in_headers(self):
         response=Mock(status_code=200);response.json.return_value={'image_count':1,'artistthumb':[{'id':'1','url':'https://assets.fanart.tv/a.jpg','likes':'2'}]};response.raise_for_status.return_value=None
-        with patch.object(fanart.requests,'get',return_value=response) as get:data=fanart.lookup(self.repo,'artist',self.ARTIST)
+        with patch.object(fanart.network,'get',return_value=response) as get:data=fanart.lookup(self.repo,'artist',self.ARTIST)
         url=get.call_args.args[0];headers=get.call_args.kwargs['headers']
         self.assertEqual(url,'https://webservice.fanart.tv/v3.2/music/'+self.ARTIST);self.assertNotIn('secret',url)
         self.assertFalse(get.call_args.kwargs['allow_redirects'])
@@ -30,7 +30,7 @@ class FanartTests(unittest.TestCase):
 
     def test_cache_avoids_repeated_requests(self):
         response=Mock(status_code=200);response.json.return_value={'artistbackground':[]};response.raise_for_status.return_value=None
-        with patch.object(fanart.requests,'get',return_value=response) as get:
+        with patch.object(fanart.network,'get',return_value=response) as get:
             fanart.lookup(self.repo,'artist',self.ARTIST);fanart.lookup(self.repo,'artist',self.ARTIST)
         self.assertEqual(get.call_count,1)
 

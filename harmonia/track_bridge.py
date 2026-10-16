@@ -50,7 +50,7 @@ def links(tracks,plex,manual=None):
 def context(config,plex,album_id=None,inventory=None):
     from .accounts import root_repository
     from .lidarr import config as settings
-    from .inventory import current,identity as plex_identity
+    from .inventory import current
     from .lidarr_requests import server_id
     cfg=settings(root_repository())
     if not cfg.get('enabled'):return None
@@ -59,7 +59,6 @@ def context(config,plex,album_id=None,inventory=None):
     if album_id is not None:tracks=[t for t in tracks if str(t.get('album_id'))==str(album_id)]
     # Old scans are intentionally not interpreted as an empty library.
     if 'tracks' not in inventory:return {'pending':True,'tracks':[],'links':{}}
-    from types import SimpleNamespace
     p=config.config['plex'];scope=server_id(cfg)+':'+hashlib.sha256((p['url'].rstrip('/')+'|'+str(p.get('music_library_key',''))).encode()).hexdigest()
     manual=root_repository().load('track_links').get(scope,{})
     from .file_tools import mapped,settings as file_settings
