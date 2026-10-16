@@ -1,8 +1,10 @@
 """Durable atomic writes for JSON exports and startup configuration."""
+
 from pathlib import Path
 import json
 import os
 import tempfile
+
 
 def _fsync_parent_directory(path: Path):
     """Best-effort fsync of the containing directory after os.replace()."""
@@ -51,11 +53,12 @@ def _atomic_write_text(path: Path, text: str):
 
 def _atomic_write_json(path: Path, data, *, ensure_ascii: bool = True):
     """Serialize JSON then atomically replace the destination file."""
-    payload = json.dumps(
-        data,
-        indent=2,
-        ensure_ascii=ensure_ascii,
-    ) + "\n"
+    payload = (
+        json.dumps(
+            data,
+            indent=2,
+            ensure_ascii=ensure_ascii,
+        )
+        + "\n"
+    )
     _atomic_write_text(path, payload)
-
-

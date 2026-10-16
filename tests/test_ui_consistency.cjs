@@ -85,7 +85,7 @@ function content(tree){return nodes(tree).map(label).join(' ')}
  assert.ok(!text('Auth.tsx').includes('href="#missing">Library Management'));
  assert.ok(text('TrackDetails.tsx').includes('aria-label="Filter playlists"'));assert.ok(text('TextPlaylist.tsx').includes('aria-label="Tracks to parse"'));
  assert.ok(text('JobsPanel.tsx').includes('"lookup"'));
- assert.match(text('pass-20261008.css'),/@media\(max-width:850px\)\{\s*\.shell main>header/);
+ assert.match(text('app.css'),/@media\(max-width:850px\)\{\s*\.shell main>header/);
 // Evaluate the imported CSS cascade for the header cells at phone/tablet/desktop widths.
 // This is a rule check, not a browser rendering or physical-device test.
 const postcss=require('../web/node_modules/postcss');

@@ -1,20 +1,21 @@
 """Formatting shared by background job output."""
 
+
 class Colors:
-    RESET = '\033[0m'
-    BOLD = '\033[1m'
-    DIM = '\033[2m'
-    RED = '\033[91m'
-    GREEN = '\033[92m'
-    CYAN = '\033[96m'
-    YELLOW = '\033[93m'
-    MAGENTA = '\033[95m'
-    BLUE = '\033[94m'
-    WHITE = '\033[97m'
+    RESET = "\033[0m"
+    BOLD = "\033[1m"
+    DIM = "\033[2m"
+    RED = "\033[91m"
+    GREEN = "\033[92m"
+    CYAN = "\033[96m"
+    YELLOW = "\033[93m"
+    MAGENTA = "\033[95m"
+    BLUE = "\033[94m"
+    WHITE = "\033[97m"
 
     # Brand-appropriate 24-bit terminal colors.
-    SPOTIFY = '\033[38;2;29;185;84m'       # #1DB954
-    APPLE_MUSIC = '\033[38;2;250;45;72m'   # #FA2D48
+    SPOTIFY = "\033[38;2;29;185;84m"  # #1DB954
+    APPLE_MUSIC = "\033[38;2;250;45;72m"  # #FA2D48
 
 
 def colored(text: str, color: str) -> str:
@@ -48,8 +49,6 @@ def auto_sync_display(
     return colored(label, Colors.RED)
 
 
-
-
 def provenance_display(value: str) -> str:
     """Color automatic/manual/legacy provenance consistently."""
     normalized = str(value or "legacy").strip().lower()
@@ -62,7 +61,3 @@ def provenance_display(value: str) -> str:
         normalized,
         colors.get(normalized, Colors.WHITE),
     )
-
-
-
-

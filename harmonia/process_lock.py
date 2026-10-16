@@ -1,4 +1,5 @@
 """Account-aware, cancellable process locking for background work."""
+
 from pathlib import Path
 import fcntl
 import hashlib
@@ -6,6 +7,7 @@ import os
 import tempfile
 import time
 from .runtime_paths import CONFIG_DIR
+
 
 def _process_lock_path() -> Path:
     """Return a per-working-directory lock path outside the Git checkout."""
@@ -25,11 +27,21 @@ class ProcessLock:
 
     def __init__(self, path: Path = None, wait: bool = None):
         from .accounts import personal_repository, actor, is_owner
-        self.path = Path(path) if path is not None else (personal_repository().directory / '.process.lock' if actor() and not is_owner(actor()) else _process_lock_path())
+
+        self.path = (
+            Path(path)
+            if path is not None
+            else (
+                personal_repository().directory / ".process.lock"
+                if actor() and not is_owner(actor())
+                else _process_lock_path()
+            )
+        )
         self._handle = None
         # Background jobs wait at a cancellable checkpoint; interactive callers
         # retain immediate busy errors. Explicit wait=False remains supported.
         from . import jobs
+
         self.wait = bool(jobs.current()) if wait is None else wait
 
     def __enter__(self):
@@ -45,6 +57,7 @@ class ProcessLock:
                     if not self.wait:
                         raise
                     from . import jobs
+
                     if jobs.current():
                         jobs.current().checkpoint()
                     time.sleep(0.1)
@@ -79,5 +92,3 @@ class ProcessLock:
             self._handle.close()
             self._handle = None
         return False
-
-

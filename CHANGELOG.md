@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.0.0.103 · Beta — 2026-10-16
+
+- Add job runtime budgets and visible stopping status while preserving safe Plex writes and recovery.
+- Separate source observations, match state, matching and sync workflow phases; retain the public Syncer interface.
+- Require clean lint and formatting across all Python sources, scripts and tests.
+- Route runtime messages through redacted logging with shared job and diagnostic severity.
+- Replace unmaintained matching dependencies with RapidFuzz while preserving integer score behavior.
+- Authenticate every pinned Python runtime artifact with SHA-256 hashes and replace a withdrawn Soup Sieve pin.
+- Expand provider and sync tests, enforce coverage minimums in CI, and name tests by behavior.
+- Consolidate the stylesheet cascade, remove duplicate icons, and document the compose template’s LAN port exposure.
+
 ## 1.0.0.102 · Beta — 2026-10-16
 
 - Move page-read and refresh feedback into an expandable Background updates section in Activity; remove page-shifting banners and routine settings indicators.

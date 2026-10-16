@@ -1,4 +1,5 @@
 """Apple Music playlist metadata, track extraction and artwork lookup."""
+
 from bs4 import BeautifulSoup
 from typing import List
 from typing import Optional
@@ -10,9 +11,10 @@ from .track_duration import source_duration
 from html import unescape
 from urllib.parse import urlparse
 from .config import Config
-from .runtime_output import print
+from .runtime_output import emit
 from .runtime_paths import APPLE_ARTWORK_SIZE
 from .text_utils import clean_playlist_description, repair_text
+
 
 class AppleMusicAPI:
     """
@@ -44,9 +46,7 @@ class AppleMusicAPI:
 
         if isinstance(value, dict):
             for key in ("url", "contentUrl", "src"):
-                result = AppleMusicAPI._normalize_artwork_url(
-                    value.get(key)
-                )
+                result = AppleMusicAPI._normalize_artwork_url(value.get(key))
                 if result:
                     return result
             return ""
@@ -89,16 +89,8 @@ class AppleMusicAPI:
     def _artwork_dimensions_from_value(value) -> Tuple[Optional[int], Optional[int]]:
         """Read declared width/height from an Apple artwork object or URL."""
         if isinstance(value, dict):
-            width = (
-                value.get("width")
-                or value.get("maximumWidth")
-                or value.get("maxWidth")
-            )
-            height = (
-                value.get("height")
-                or value.get("maximumHeight")
-                or value.get("maxHeight")
-            )
+            width = value.get("width") or value.get("maximumWidth") or value.get("maxWidth")
+            height = value.get("height") or value.get("maximumHeight") or value.get("maxHeight")
 
             try:
                 width = int(width) if width is not None else None
@@ -115,9 +107,7 @@ class AppleMusicAPI:
 
             for key in ("url", "contentUrl", "src"):
                 if value.get(key):
-                    return AppleMusicAPI._artwork_dimensions_from_value(
-                        value.get(key)
-                    )
+                    return AppleMusicAPI._artwork_dimensions_from_value(value.get(key))
 
         if isinstance(value, str):
             # Useful for fixed derivatives such as 1200x630wp-60.jpg.
@@ -130,7 +120,6 @@ class AppleMusicAPI:
                 return int(match.group(1)), int(match.group(2))
 
         return None, None
-
 
     @staticmethod
     def _walk_json(obj):
@@ -166,11 +155,7 @@ class AppleMusicAPI:
             if not isinstance(schema, dict):
                 continue
 
-            schema_type = str(
-                schema.get("@type")
-                or schema.get("type")
-                or ""
-            ).casefold()
+            schema_type = str(schema.get("@type") or schema.get("type") or "").casefold()
 
             if "playlist" not in schema_type and name:
                 continue
@@ -179,16 +164,9 @@ class AppleMusicAPI:
                 name = schema.get("name", "") or ""
 
             if not description:
-                description = (
-                    schema.get("description", "")
-                    or schema.get("abstract", "")
-                    or ""
-                )
+                description = schema.get("description", "") or schema.get("abstract", "") or ""
 
-            raw_image = (
-                schema.get("image")
-                or schema.get("thumbnailUrl")
-            )
+            raw_image = schema.get("image") or schema.get("thumbnailUrl")
             if raw_image:
                 schema_images.append(raw_image)
 
@@ -211,6 +189,7 @@ class AppleMusicAPI:
                 description = meta.get("content", "") or ""
 
         from .source_names import clean
+
         name = clean(name)
 
         target_name = name.casefold().strip()
@@ -268,11 +247,7 @@ class AppleMusicAPI:
 
         # Strongest candidates: objects that look like the playlist itself.
         for obj in cls._walk_json(data):
-            obj_name = str(
-                obj.get("name")
-                or obj.get("title")
-                or ""
-            ).casefold().strip()
+            obj_name = str(obj.get("name") or obj.get("title") or "").casefold().strip()
 
             obj_type = str(
                 obj.get("kind")
@@ -284,17 +259,11 @@ class AppleMusicAPI:
 
             play_params = obj.get("playParams")
             if isinstance(play_params, dict):
-                obj_type += " " + str(
-                    play_params.get("kind")
-                    or play_params.get("type")
-                    or ""
-                ).casefold()
+                obj_type += (
+                    " " + str(play_params.get("kind") or play_params.get("type") or "").casefold()
+                )
 
-            exact_name = bool(
-                target_name
-                and obj_name
-                and obj_name == target_name
-            )
+            exact_name = bool(target_name and obj_name and obj_name == target_name)
             playlist_type = "playlist" in obj_type
 
             if not (exact_name or playlist_type):
@@ -350,25 +319,15 @@ class AppleMusicAPI:
             best = candidates[0]
             dim_text = ""
             if best["width"] and best["height"]:
-                dim_text = (
-                    f" ({best['width']}x{best['height']} declared)"
-                )
+                dim_text = f" ({best['width']}x{best['height']} declared)"
 
-            print(
-                f"  ✓ Apple artwork candidate [{best['label']}]"
-                f"{dim_text}: {best['url']}"
-            )
+            emit(f"  ✓ Apple artwork candidate [{best['label']}]{dim_text}: {best['url']}")
 
         return {
-            "name": repair_text(
-                name or "Apple Music Playlist"
-            ),
-            "description": clean_playlist_description(
-                description
-            ),
+            "name": repair_text(name or "Apple Music Playlist"),
+            "description": clean_playlist_description(description),
             "image_url": image_url,
         }
-
 
     @staticmethod
     def _track_from_item(item: dict) -> Optional[dict]:
@@ -406,32 +365,22 @@ class AppleMusicAPI:
                 if isinstance(first, dict):
                     album = first.get("title", "") or ""
 
-        source_id = (
-            item.get("id")
-            or item.get("adamId")
-            or ""
-        )
+        source_id = item.get("id") or item.get("adamId") or ""
 
         play_params = item.get("playParams")
         if isinstance(play_params, dict):
-            source_id = (
-                source_id
-                or play_params.get("catalogId")
-                or play_params.get("id")
-                or ""
-            )
+            source_id = source_id or play_params.get("catalogId") or play_params.get("id") or ""
 
         from .artist_credits import names
-        credit_names=names(artist)
+
+        credit_names = names(artist)
         return {
             "title": repair_text(title).strip(),
             "artist": repair_text(artist).strip(),
-            "artists": [{"name":repair_text(v)} for v in credit_names] if len(credit_names)>1 else [{"name":repair_text(artist).strip()}],
-            "album": (
-                repair_text(album).strip()
-                if isinstance(album, str)
-                else ""
-            ),
+            "artists": [{"name": repair_text(v)} for v in credit_names]
+            if len(credit_names) > 1
+            else [{"name": repair_text(artist).strip()}],
+            "album": (repair_text(album).strip() if isinstance(album, str) else ""),
             "source_id": str(source_id) if source_id else "",
             "duration": source_duration(item),
         }
@@ -442,7 +391,7 @@ class AppleMusicAPI:
         tracks = []
         seen = set()
 
-        def add_track(item,dedupe=True):
+        def add_track(item, dedupe=True):
             track = cls._track_from_item(item)
             if not track:
                 return
@@ -482,7 +431,7 @@ class AppleMusicAPI:
                     # A playlist may intentionally contain the same catalog
                     # track more than once. Section items are the authoritative
                     # ordered list, so retain duplicate occurrences here.
-                    add_track(item,dedupe=False)
+                    add_track(item, dedupe=False)
 
         if tracks:
             return tracks
@@ -505,11 +454,7 @@ class AppleMusicAPI:
             if not isinstance(schema, dict):
                 continue
 
-            schema_type = str(
-                schema.get("@type")
-                or schema.get("type")
-                or ""
-            ).casefold()
+            schema_type = str(schema.get("@type") or schema.get("type") or "").casefold()
 
             if "playlist" not in schema_type:
                 continue
@@ -518,11 +463,7 @@ class AppleMusicAPI:
                 name = schema.get("name", "") or ""
 
             if not description:
-                description = (
-                    schema.get("description", "")
-                    or schema.get("abstract", "")
-                    or ""
-                )
+                description = schema.get("description", "") or schema.get("abstract", "") or ""
 
             if name and description:
                 break
@@ -546,15 +487,12 @@ class AppleMusicAPI:
                 description = meta.get("content", "") or ""
 
         from .source_names import clean
+
         name = clean(name)
 
         return {
-            "name": repair_text(
-                name or "Apple Music Playlist"
-            ),
-            "description": clean_playlist_description(
-                description
-            ),
+            "name": repair_text(name or "Apple Music Playlist"),
+            "description": clean_playlist_description(description),
             "image_url": "",
         }
 
@@ -576,12 +514,11 @@ class AppleMusicAPI:
         )
 
         if not playlist_id:
-            raise Exception(
-                "Could not extract Apple Music playlist ID from the supplied URL"
-            )
+            raise Exception("Could not extract Apple Music playlist ID from the supplied URL")
 
         from .playlist_urls import canonical_playlist, apple_playlist_get
-        url = canonical_playlist(Config._normalize_url_input(playlist_url), 'applemusic')[1]
+
+        url = canonical_playlist(Config._normalize_url_input(playlist_url), "applemusic")[1]
 
         headers = {
             "User-Agent": (
@@ -599,16 +536,14 @@ class AppleMusicAPI:
 
         try:
             resp = apple_playlist_get(
-                network, url,
+                network,
+                url,
                 headers=headers,
                 timeout=15,
             )
 
             if resp.status_code != 200:
-                raise Exception(
-                    f"Apple Music returned HTTP {resp.status_code} "
-                    f"for {url}"
-                )
+                raise Exception(f"Apple Music returned HTTP {resp.status_code} for {url}")
 
             soup = BeautifulSoup(
                 resp.content,
@@ -622,23 +557,18 @@ class AppleMusicAPI:
 
             if not script:
                 raise Exception(
-                    "Could not find Apple Music serialized-server-data "
-                    "in the playlist page"
+                    "Could not find Apple Music serialized-server-data in the playlist page"
                 )
 
             raw_json = script.string or script.get_text()
 
             if not raw_json or not raw_json.strip():
-                raise Exception(
-                    "Apple Music serialized-server-data was empty"
-                )
+                raise Exception("Apple Music serialized-server-data was empty")
 
             try:
                 data = json.loads(raw_json)
             except json.JSONDecodeError as e:
-                raise Exception(
-                    f"Could not parse Apple Music server data: {e}"
-                )
+                raise Exception(f"Could not parse Apple Music server data: {e}")
 
             if fetch_artwork:
                 metadata = self._extract_metadata(
@@ -652,45 +582,38 @@ class AppleMusicAPI:
                 )
 
             tracks = self._extract_tracks(data)
-            counts=[]
+            counts = []
             for obj in self._walk_json(data):
-                schema=obj.get('schemaContent') if isinstance(obj.get('schemaContent'),dict) else obj
-                kind=str(schema.get('@type') or schema.get('type') or '').casefold()
-                if 'playlist' in kind:
-                    for key in ('trackCount','track-count','totalTrackCount','numTracks'):
-                        value=schema.get(key)
-                        if isinstance(value,int) and 0<=value<=10000:counts.append(value)
-            expected=max(counts) if counts else None
+                schema = (
+                    obj.get("schemaContent") if isinstance(obj.get("schemaContent"), dict) else obj
+                )
+                kind = str(schema.get("@type") or schema.get("type") or "").casefold()
+                if "playlist" in kind:
+                    for key in ("trackCount", "track-count", "totalTrackCount", "numTracks"):
+                        value = schema.get(key)
+                        if isinstance(value, int) and 0 <= value <= 10000:
+                            counts.append(value)
+            expected = max(counts) if counts else None
 
-            if not tracks and expected!=0:
+            if not tracks and expected != 0:
                 raise Exception(
                     "Apple Music page loaded, but no playlist tracks "
                     "could be extracted from serialized-server-data"
                 )
 
             if fetch_artwork and not metadata.get("image_url"):
-                print(
-                    "  ⚠ No Apple Music playlist artwork found"
-                )
+                emit("  ⚠ No Apple Music playlist artwork found")
 
             metadata["source_url"] = url
             metadata["source_id"] = playlist_id
-            metadata['expected_track_count']=expected
-            metadata['complete']=isinstance(expected,int) and len(tracks)>=expected
+            metadata["expected_track_count"] = expected
+            metadata["complete"] = isinstance(expected, int) and len(tracks) >= expected
 
             return tracks, metadata
 
         except network.exceptions.Timeout:
-            raise Exception(
-                "Request timed out. Apple Music is not responding."
-            )
+            raise Exception("Request timed out. Apple Music is not responding.")
         except network.exceptions.RequestException as e:
-            raise Exception(
-                f"Apple Music connection error: {e}"
-            )
+            raise Exception(f"Apple Music connection error: {e}")
         except Exception as e:
-            raise Exception(
-                f"Failed to fetch Apple Music playlist: {e}"
-            )
-
-
+            raise Exception(f"Failed to fetch Apple Music playlist: {e}")

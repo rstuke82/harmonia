@@ -1,20 +1,22 @@
 """Track scoring, artist aliases, version guards and automatic matching."""
+
 from typing import List
 from typing import Optional
 from typing import Tuple
 import contextvars
-from fuzzywuzzy import fuzz
+from . import fuzzy_scores as fuzz
 from functools import lru_cache
 import re
 import unicodedata
 from .text_utils import repair_text
+
 
 class Matcher:
     """Track matching logic with title/artist identity + album preference."""
 
     # Normalized artist -> every normalized name in the same global alias group.
     ARTIST_ALIAS_LOOKUP = {}
-    _alias_context = contextvars.ContextVar("matcher_aliases",default=None)
+    _alias_context = contextvars.ContextVar("matcher_aliases", default=None)
 
     MATCH_THRESHOLD = 90
     PROMPT_THRESHOLD = 70
@@ -50,17 +52,12 @@ class Matcher:
         if not value:
             return ""
 
-        text = unicodedata.normalize('NFKD',repair_text(value)).casefold()
-        text = ''.join(c for c in text if not unicodedata.combining(c))
+        text = unicodedata.normalize("NFKD", repair_text(value)).casefold()
+        text = "".join(c for c in text if not unicodedata.combining(c))
         # Equivalent Unicode hyphens/dashes are common in provider album names.
-        text = text.translate(str.maketrans('‐‑‒–—―−', '-------'))
-        text = re.sub(r'(?<!\w)&(?!\w)', ' and ', text)
-        text = (
-            text.replace("’", "'")
-            .replace("‘", "'")
-            .replace("“", '"')
-            .replace("”", '"')
-        )
+        text = text.translate(str.maketrans("‐‑‒–—―−", "-------"))
+        text = re.sub(r"(?<!\w)&(?!\w)", " and ", text)
+        text = text.replace("’", "'").replace("‘", "'").replace("“", '"').replace("”", '"')
         text = text.replace("'", "").replace("’", "").replace("‘", "")
         return re.sub(r"\s+", " ", text).strip()
 
@@ -160,84 +157,134 @@ class Matcher:
 
     @classmethod
     def _taylors_version(cls, track):
-        value=cls._normalize_match_text(' '.join(str(track.get(k) or '') for k in ('title','album')))
-        return bool(re.search(r"\btaylors?\s+version\b",value))
+        value = cls._normalize_match_text(
+            " ".join(str(track.get(k) or "") for k in ("title", "album"))
+        )
+        return bool(re.search(r"\btaylors?\s+version\b", value))
 
     @classmethod
     def _recording_version_mismatch(cls, source, candidate):
         # A re-recording is a different identity, in either direction.
         if cls._taylors_version(source) != cls._taylors_version(candidate):
             return True
-        return cls._feature_identity_reason(source, candidate).startswith('Conflict:')
+        return cls._feature_identity_reason(source, candidate).startswith("Conflict:")
 
     @classmethod
     def _feature_identity_reason(cls, source, candidate):
         """Distinguish explicit guest conflicts from corroborated omissions."""
+
         def text(track):
             from .artist_credits import structured
+
             credits = structured(track)
-            names = [c.get('name', '') if isinstance(c, dict) else str(c) for c in credits] if isinstance(credits, list) else []
-            return cls._normalize_match_text(' '.join([str(track.get(k) or '') for k in ('title', 'artist', 'album')] + names))
+            names = (
+                [c.get("name", "") if isinstance(c, dict) else str(c) for c in credits]
+                if isinstance(credits, list)
+                else []
+            )
+            return cls._normalize_match_text(
+                " ".join([str(track.get(k) or "") for k in ("title", "artist", "album")] + names)
+            )
+
         def guests(track):
             values = []
-            for key in ('title', 'artist', 'album'):
-                value = cls._normalize_match_text(str(track.get(key) or ''))
-                for credit in re.findall(r'(?:^|[\s(\[\-:])(?:feat(?:uring)?\.?|ft\.?)\s+([^\)\]]+)', value):
-                    credit = re.sub(r'\s*-\s*(?:single|ep)$', '', credit).strip()
-                    values.extend(part.strip() for part in re.split(r'\s*(?:,|&|\band\b)\s*', credit) if part.strip())
+            for key in ("title", "artist", "album"):
+                value = cls._normalize_match_text(str(track.get(key) or ""))
+                for credit in re.findall(
+                    r"(?:^|[\s(\[\-:])(?:feat(?:uring)?\.?|ft\.?)\s+([^\)\]]+)", value
+                ):
+                    credit = re.sub(r"\s*-\s*(?:single|ep)$", "", credit).strip()
+                    values.extend(
+                        part.strip()
+                        for part in re.split(r"\s*(?:,|&|\band\b)\s*", credit)
+                        if part.strip()
+                    )
             return values
+
         source_guests, candidate_guests = guests(source), guests(candidate)
         if not source_guests and not candidate_guests:
-            return ''
+            return ""
+
         def missing(required, available):
-            return any(not re.search(r'(?<!\w)' + re.escape(name) + r'(?!\w)', available) for name in required)
+            return any(
+                not re.search(r"(?<!\w)" + re.escape(name) + r"(?!\w)", available)
+                for name in required
+            )
+
         omitted = missing(source_guests, text(candidate)) or missing(candidate_guests, text(source))
         if not omitted:
-            return 'Featured artist credit agrees'
+            return "Featured artist credit agrees"
         if source_guests and candidate_guests:
-            return 'Conflict: different featured artists'
-        left = str(source.get('recording_id') or '')
-        right = str(candidate.get('recording_id') or '')
+            return "Conflict: different featured artists"
+        left = str(source.get("recording_id") or "")
+        right = str(candidate.get("recording_id") or "")
         if left and right:
-            return 'Shared recording ID confirms omitted guest credit' if left == right else 'Conflict: different recording IDs'
+            return (
+                "Shared recording ID confirms omitted guest credit"
+                if left == right
+                else "Conflict: different recording IDs"
+            )
+
         # Omitted credits can be corroborated by the same album and a close
         # duration. A separately named featured single cannot use this path.
         def album(track):
-            return cls._album_identity(track.get('album') or '')
+            return cls._album_identity(track.get("album") or "")
+
         def lead(track):
             from .artist_credits import structured
+
             credits = structured(track)
             if isinstance(credits, list) and credits:
                 first = credits[0]
-                value = first.get('name', '') if isinstance(first, dict) else str(first)
+                value = first.get("name", "") if isinstance(first, dict) else str(first)
             else:
-                value = str(track.get('artist') or '')
-                value = re.split(r'\s+(?:feat(?:uring)?\.?|ft\.?)\s+', value, maxsplit=1, flags=re.I)[0]
+                value = str(track.get("artist") or "")
+                value = re.split(
+                    r"\s+(?:feat(?:uring)?\.?|ft\.?)\s+", value, maxsplit=1, flags=re.I
+                )[0]
                 if source_guests or candidate_guests:
-                    value = value.split(',', 1)[0]
-            return re.sub(r'[^\w]+', ' ', cls._normalize_match_text(value)).strip()
+                    value = value.split(",", 1)[0]
+            return re.sub(r"[^\w]+", " ", cls._normalize_match_text(value)).strip()
+
         from .track_duration import source_duration
+
         def seconds(track):
             value = source_duration(track)
             return value / 1000 if value is not None and value > 10000 else value
+
         first, second = seconds(source), seconds(candidate)
         same_album = bool(album(source) and album(source) == album(candidate))
+
         # A song-named single may omit its guest credit in Plex's release name.
         # Keep this separate from album normalization: a featured single must
         # never become equivalent to an unrelated studio album.
         def single_name(track):
-            value = re.sub(r'\s*-\s*(?:single|ep)$', '', str(track.get('album') or ''), flags=re.I)
-            value = re.sub(r'\s*[\(\[]\s*(?:feat(?:uring)?\.?|ft\.?)\s+[^)\]]+[\)\]]', '', value, flags=re.I)
+            value = re.sub(r"\s*-\s*(?:single|ep)$", "", str(track.get("album") or ""), flags=re.I)
+            value = re.sub(
+                r"\s*[\(\[]\s*(?:feat(?:uring)?\.?|ft\.?)\s+[^)\]]+[\)\]]", "", value, flags=re.I
+            )
             return cls._normalize_match_text(value)
-        core_title = cls._normalize_match_text(cls._strip_title_metadata(str(source.get('title') or '')))
-        same_single = bool(core_title and single_name(source) == core_title == single_name(candidate))
-        if ((same_album or same_single)
-                and lead(source) and lead(source) == lead(candidate)
-                and cls._normalize_match_text(cls._strip_title_metadata(str(source.get('title') or '')))
-                    == cls._normalize_match_text(cls._strip_title_metadata(str(candidate.get('title') or '')))
-                and first is not None and second is not None and abs(first-second) <= 2):
-            return 'Guest credit omitted; album and duration agree'
-        return 'Conflict: featured recording needs matching credits or recording evidence'
+
+        core_title = cls._normalize_match_text(
+            cls._strip_title_metadata(str(source.get("title") or ""))
+        )
+        same_single = bool(
+            core_title and single_name(source) == core_title == single_name(candidate)
+        )
+        if (
+            (same_album or same_single)
+            and lead(source)
+            and lead(source) == lead(candidate)
+            and cls._normalize_match_text(cls._strip_title_metadata(str(source.get("title") or "")))
+            == cls._normalize_match_text(
+                cls._strip_title_metadata(str(candidate.get("title") or ""))
+            )
+            and first is not None
+            and second is not None
+            and abs(first - second) <= 2
+        ):
+            return "Guest credit omitted; album and duration agree"
+        return "Conflict: featured recording needs matching credits or recording evidence"
 
     @classmethod
     @lru_cache(maxsize=65536)
@@ -256,9 +303,13 @@ class Matcher:
             Song (Part 1) <-> Song (Part 2)
         an artificial 100% match.
         """
+
         def base_title(value):
-            value=cls._normalize_match_text(value)
-            return re.sub(r"\s*(?:[([]\s*taylors?\s+version\s*[)\]]|[-:]\s*taylors?\s+version)\s*",' ',value).strip()
+            value = cls._normalize_match_text(value)
+            return re.sub(
+                r"\s*(?:[([]\s*taylors?\s+version\s*[)\]]|[-:]\s*taylors?\s+version)\s*", " ", value
+            ).strip()
+
         source_raw = base_title(source_title)
         plex_raw = base_title(plex_title)
 
@@ -320,12 +371,8 @@ class Matcher:
                 )
             )
 
-        source_base, source_had_trailing = (
-            cls._strip_trailing_parenthetical(source_meta)
-        )
-        plex_base, plex_had_trailing = (
-            cls._strip_trailing_parenthetical(plex_meta)
-        )
+        source_base, source_had_trailing = cls._strip_trailing_parenthetical(source_meta)
+        plex_base, plex_had_trailing = cls._strip_trailing_parenthetical(plex_meta)
 
         # Generic parenthetical fallback only if ONE side has it.
         if source_had_trailing and not plex_had_trailing:
@@ -411,9 +458,7 @@ class Matcher:
             return
 
         for canonical, aliases in alias_groups.items():
-            canonical_norm = cls._normalize_match_text(
-                canonical
-            )
+            canonical_norm = cls._normalize_match_text(canonical)
 
             if not canonical_norm:
                 continue
@@ -433,9 +478,7 @@ class Matcher:
                     members.add(alias_norm)
 
             for member in members:
-                graph.setdefault(member, set()).update(
-                    members - {member}
-                )
+                graph.setdefault(member, set()).update(members - {member})
 
         lookup = {}
         visited = set()
@@ -453,9 +496,7 @@ class Matcher:
                     continue
 
                 component.add(current)
-                stack.extend(
-                    graph.get(current, set()) - component
-                )
+                stack.extend(graph.get(current, set()) - component)
 
             visited.update(component)
             ordered = sorted(component)
@@ -477,7 +518,11 @@ class Matcher:
             if variant and variant not in expanded:
                 expanded.append(variant)
 
-            for alias in (cls._alias_context.get() if cls._alias_context.get() is not None else cls.ARTIST_ALIAS_LOOKUP).get(
+            for alias in (
+                cls._alias_context.get()
+                if cls._alias_context.get() is not None
+                else cls.ARTIST_ALIAS_LOOKUP
+            ).get(
                 variant,
                 [],
             ):
@@ -512,7 +557,7 @@ class Matcher:
             return [""]
 
         variants = [value]
-        if value.startswith('the ') and len(value)>4:
+        if value.startswith("the ") and len(value) > 4:
             variants.append(value[4:])
 
         # Artist-string feature syntax.
@@ -542,9 +587,7 @@ class Matcher:
                     if candidate and candidate not in variants:
                         variants.append(candidate)
 
-        return cls._expand_artist_aliases(
-            variants
-        )
+        return cls._expand_artist_aliases(variants)
 
     @classmethod
     def _artist_score(
@@ -555,17 +598,10 @@ class Matcher:
         plex_title: str = "",
     ) -> int:
         """Return the best conservative artist score."""
-        remix_credit = cls._title_remix_credit(
-            source_title
-        )
+        remix_credit = cls._title_remix_credit(source_title)
 
-        allow_source_primary = (
-            cls._title_has_feature_credit(source_title)
-            or (
-                bool(remix_credit)
-                and remix_credit
-                in cls._normalize_match_text(source_artist)
-            )
+        allow_source_primary = cls._title_has_feature_credit(source_title) or (
+            bool(remix_credit) and remix_credit in cls._normalize_match_text(source_artist)
         )
 
         source_variants = cls._artist_variants(
@@ -575,9 +611,7 @@ class Matcher:
 
         plex_variants = cls._artist_variants(
             plex_artist,
-            allow_primary_collaborator=cls._title_has_feature_credit(
-                plex_title
-            ),
+            allow_primary_collaborator=cls._title_has_feature_credit(plex_title),
         )
 
         return max(
@@ -585,7 +619,6 @@ class Matcher:
             for source_variant in source_variants
             for plex_variant in plex_variants
         )
-
 
     @classmethod
     @lru_cache(maxsize=65536)
@@ -620,10 +653,7 @@ class Matcher:
             r"\s[-:]\s*[^-:]*\bmix\b.*$",
         )
 
-        if any(
-            re.search(pattern, remix_value, flags=re.IGNORECASE)
-            for pattern in remix_patterns
-        ):
+        if any(re.search(pattern, remix_value, flags=re.IGNORECASE) for pattern in remix_patterns):
             kinds.add("remix")
 
         # Live is deliberately conservative so a real title such as
@@ -636,10 +666,7 @@ class Matcher:
             r"\bin concert\b",
         )
 
-        if any(
-            re.search(pattern, value, flags=re.IGNORECASE)
-            for pattern in live_patterns
-        ):
+        if any(re.search(pattern, value, flags=re.IGNORECASE) for pattern in live_patterns):
             kinds.add("live")
 
         acoustic_patterns = (
@@ -649,10 +676,7 @@ class Matcher:
             r"\s[-:]\s*[^-:]*\bstripped\b.*$",
         )
 
-        if any(
-            re.search(pattern, value, flags=re.IGNORECASE)
-            for pattern in acoustic_patterns
-        ):
+        if any(re.search(pattern, value, flags=re.IGNORECASE) for pattern in acoustic_patterns):
             kinds.add("acoustic")
 
         demo_patterns = (
@@ -660,10 +684,7 @@ class Matcher:
             r"\s[-:]\s*[^-:]*\bdemo\b.*$",
         )
 
-        if any(
-            re.search(pattern, value, flags=re.IGNORECASE)
-            for pattern in demo_patterns
-        ):
+        if any(re.search(pattern, value, flags=re.IGNORECASE) for pattern in demo_patterns):
             kinds.add("demo")
 
         # Distinct session recordings include branded platform sessions and
@@ -683,10 +704,7 @@ class Matcher:
             r"[^)\]]*[\)\]]",
         )
 
-        if any(
-            re.search(pattern, value, flags=re.IGNORECASE)
-            for pattern in session_patterns
-        ):
+        if any(re.search(pattern, value, flags=re.IGNORECASE) for pattern in session_patterns):
             kinds.add("session")
 
         return kinds
@@ -719,10 +737,10 @@ class Matcher:
     @lru_cache(maxsize=65536)
     def _album_identity(cls, album: str) -> str:
         """Compare specific album names, retaining volume and recording credits."""
-        value = re.sub(r'\s*-\s*(?:single|ep)$', '', str(album or ''), flags=re.I)
+        value = re.sub(r"\s*-\s*(?:single|ep)$", "", str(album or ""), flags=re.I)
         # Only a delimited descriptive prefix on an otherwise named album.
         # Never collapse standalone Greatest Hits or distinct featured singles.
-        value = re.sub(r'^\s*greatest hits\s*:\s*(?=\S)', '', value, flags=re.I)
+        value = re.sub(r"^\s*greatest hits\s*:\s*(?=\S)", "", value, flags=re.I)
         return cls._normalize_album(value)
 
     @classmethod
@@ -740,9 +758,7 @@ class Matcher:
         collections can contain alternate or otherwise specific recordings,
         so an unrelated album copy should be reviewed instead of substituted.
         """
-        value = cls._normalize_album(
-            album
-        )
+        value = cls._normalize_album(album)
 
         if not value:
             return False
@@ -814,15 +830,12 @@ class Matcher:
             r"\bstripped\b",
         )
 
-        demo_patterns = (
-            r"\bdemo(?:s)?\b",
-        )
+        demo_patterns = (r"\bdemo(?:s)?\b",)
 
         session_patterns = (
             r"\b(?:itunes|apple(?:\s+music)?|spotify)\s+"
             r"(?:home\s+)?sessions?\b",
         )
-
 
         if any(re.search(p, value) for p in compilation_patterns):
             kinds.add("compilation")
@@ -879,47 +892,65 @@ class Matcher:
         # For unstructured text, accept a comma-separated lead only when the
         # remaining credit explicitly contains a collaboration separator. A
         # lone ampersand in a band name is never sufficient evidence.
-        credit_reason = ''
+        credit_reason = ""
         from .artist_credits import structured
+
         credits = structured(source_track)
-        lead = ''
+        lead = ""
         if credits and isinstance(credits, list):
-            lead = credits[0].get('name','') if isinstance(credits[0],dict) else str(credits[0])
-        elif source_album.lower().endswith(' - single') and cls._normalize_album(source_album[:-9]) == cls._normalize_album(source_title) and ',' in source_artist and re.search(r'\s(?:&|and)\s', source_artist.split(',',1)[1], re.I):
-            lead = source_artist.split(',',1)[0].strip()
-        credit_names=[c.get('name','') if isinstance(c,dict) else str(c) for c in credits]
-        matched_credit=next((name for name in credit_names if cls._normalize_match_text(name)==cls._normalize_match_text(plex_artist)),lead if lead and cls._normalize_match_text(lead)==cls._normalize_match_text(plex_artist) else '')
+            lead = credits[0].get("name", "") if isinstance(credits[0], dict) else str(credits[0])
+        elif (
+            source_album.lower().endswith(" - single")
+            and cls._normalize_album(source_album[:-9]) == cls._normalize_album(source_title)
+            and "," in source_artist
+            and re.search(r"\s(?:&|and)\s", source_artist.split(",", 1)[1], re.I)
+        ):
+            lead = source_artist.split(",", 1)[0].strip()
+        credit_names = [c.get("name", "") if isinstance(c, dict) else str(c) for c in credits]
+        matched_credit = next(
+            (
+                name
+                for name in credit_names
+                if cls._normalize_match_text(name) == cls._normalize_match_text(plex_artist)
+            ),
+            lead
+            if lead and cls._normalize_match_text(lead) == cls._normalize_match_text(plex_artist)
+            else "",
+        )
         if matched_credit and title_score >= 95:
-            left = re.sub(r'\s*-\s*(single|ep)$','',source_album,flags=re.I)
-            right = re.sub(r'\s*-\s*(single|ep)$','',plex_album,flags=re.I)
+            left = re.sub(r"\s*-\s*(single|ep)$", "", source_album, flags=re.I)
+            right = re.sub(r"\s*-\s*(single|ep)$", "", plex_album, flags=re.I)
             if left and cls._normalize_album(left) == cls._normalize_album(right):
                 artist_score = max(artist_score, 95)
-                credit_reason = 'A structured contributor matches; title and album agree'
+                credit_reason = "A structured contributor matches; title and album agree"
 
         # Duration supports a verified lead credit when provider/Plex guest
         # lists differ. It never substitutes for artist or song identity.
-        if not lead and cls._title_has_feature_credit(source_title) and ',' in source_artist:
-            lead=source_artist.split(',',1)[0].strip()
-        if lead and title_score>=95 and not cls._recording_version_mismatch(source_track,plex_track):
-            lead_score=cls._artist_score(lead,plex_artist,source_title,plex_title)
+        if not lead and cls._title_has_feature_credit(source_title) and "," in source_artist:
+            lead = source_artist.split(",", 1)[0].strip()
+        if (
+            lead
+            and title_score >= 95
+            and not cls._recording_version_mismatch(source_track, plex_track)
+        ):
+            lead_score = cls._artist_score(lead, plex_artist, source_title, plex_title)
             from .track_duration import source_duration
-            left=source_duration(source_track);right=source_duration(plex_track)
+
+            left = source_duration(source_track)
+            right = source_duration(plex_track)
             if left is not None and right is not None:
-                left=left/1000 if left>10000 else left
-                right=right/1000 if right>10000 else right
-                if lead_score>=95 and abs(left-right)<=5:
-                    artist_score=max(artist_score,95)
-                    credit_reason='Lead artist and song title agree; duration is within 5 seconds'
+                left = left / 1000 if left > 10000 else left
+                right = right / 1000 if right > 10000 else right
+                if lead_score >= 95 and abs(left - right) <= 5:
+                    artist_score = max(artist_score, 95)
+                    credit_reason = "Lead artist and song title agree; duration is within 5 seconds"
 
         # Preserve the existing strong artist penalty.
         weighted_artist = artist_score
         if artist_score < 70:
             weighted_artist *= 0.3
 
-        identity_score = (
-            title_score * 0.65
-            + weighted_artist * 0.35
-        )
+        identity_score = title_score * 0.65 + weighted_artist * 0.35
 
         album_score = None
         album_bonus = 0.0
@@ -952,19 +983,12 @@ class Matcher:
                     elif album_score >= 85:
                         album_bonus = 2
 
-        source_album_requires_provenance = (
-            cls._source_requires_album_provenance(
-                source_album
-            )
-        )
+        source_album_requires_provenance = cls._source_requires_album_provenance(source_album)
         album_provenance_mismatch = False
         album_provenance_penalty = 0
 
         if source_album_requires_provenance:
-            album_provenance_mismatch = (
-                album_score is None
-                or album_score < 85
-            )
+            album_provenance_mismatch = album_score is None or album_score < 85
 
             if album_provenance_mismatch:
                 album_provenance_penalty = 12
@@ -973,12 +997,8 @@ class Matcher:
         source_types = cls._album_types(source_album)
         plex_types = cls._album_types(plex_album)
 
-        source_title_types = cls._title_release_types(
-            source_title
-        )
-        plex_title_types = cls._title_release_types(
-            plex_title
-        )
+        source_title_types = cls._title_release_types(source_title)
+        plex_title_types = cls._title_release_types(plex_title)
 
         # Recording/version markers in the SOURCE TITLE are explicit intent.
         #
@@ -988,44 +1008,31 @@ class Matcher:
         # In that case a Plex remix copy is correct and should not receive
         # the normal remix penalty. The same applies to an explicitly live
         # source title.
-        requested_variant_types = (
-            source_title_types
-            & cls.VERSION_TYPES
-        )
+        requested_variant_types = source_title_types & cls.VERSION_TYPES
 
-        candidate_variant_types = (
-            plex_title_types
-            | plex_types
-        ) & cls.VERSION_TYPES
+        candidate_variant_types = (plex_title_types | plex_types) & cls.VERSION_TYPES
 
         # Canonical-copy preference still applies to release types the source
         # did NOT explicitly request in its title.
-        unwanted_plex_types = (
-            plex_types - requested_variant_types
-        )
+        unwanted_plex_types = plex_types - requested_variant_types
 
-        if (cls._album_identity(source_album)
-                and cls._album_identity(source_album) == cls._album_identity(plex_album)):
+        if cls._album_identity(source_album) and cls._album_identity(
+            source_album
+        ) == cls._album_identity(plex_album):
             # Different labels for the same compilation are not a substitution.
-            unwanted_plex_types = unwanted_plex_types - {'compilation'}
+            unwanted_plex_types = unwanted_plex_types - {"compilation"}
 
-        album_penalty = sum(
-            cls.ALBUM_TYPE_PENALTIES[kind]
-            for kind in unwanted_plex_types
-        )
+        album_penalty = sum(cls.ALBUM_TYPE_PENALTIES[kind] for kind in unwanted_plex_types)
 
         # A destination title can reveal an unwanted version even when the
         # album does not. Avoid double-penalizing a type already caught by
         # the album classification.
         unwanted_title_variant_types = (
-            (plex_title_types & cls.VERSION_TYPES)
-            - requested_variant_types
-            - unwanted_plex_types
+            (plex_title_types & cls.VERSION_TYPES) - requested_variant_types - unwanted_plex_types
         )
 
         title_variant_penalty = sum(
-            cls.ALBUM_TYPE_PENALTIES[kind]
-            for kind in unwanted_title_variant_types
+            cls.ALBUM_TYPE_PENALTIES[kind] for kind in unwanted_title_variant_types
         )
 
         # If the source explicitly asks for a recording variant, title-level evidence
@@ -1056,33 +1063,40 @@ class Matcher:
         # Do not allow an album bonus to erase a missing title-level recording variant
         # marker. A plain track on a remix/live album remains viable but ranks
         # below a candidate whose title explicitly matches the source intent.
-        missing_title_intent = (
-            requested_variant_types - plex_title_types
-        )
+        missing_title_intent = requested_variant_types - plex_title_types
 
-        if (
-            unwanted_plex_types
-            or unwanted_title_variant_types
-            or missing_title_intent
-        ):
+        if unwanted_plex_types or unwanted_title_variant_types or missing_title_intent:
             album_bonus = 0.0
 
         feature_reason = cls._feature_identity_reason(source_track, plex_track)
         if feature_reason:
             credit_reason = feature_reason
-        if cls._recording_version_mismatch(source_track,plex_track):
-            album_provenance_mismatch=True
-            album_provenance_penalty=max(album_provenance_penalty,40)
-            album_bonus=0.0
+        if cls._recording_version_mismatch(source_track, plex_track):
+            album_provenance_mismatch = True
+            album_provenance_penalty = max(album_provenance_penalty, 40)
+            album_bonus = 0.0
 
         def seconds(value):
             try:
-                value=float(value)
-                return value/1000 if value > 10000 else value
-            except (TypeError,ValueError): return None
-        source_seconds,plex_seconds=seconds(source_track.get('duration')),seconds(plex_track.get('duration'))
-        duration_delta=abs(source_seconds-plex_seconds) if source_seconds is not None and plex_seconds is not None else None
-        duration_penalty=0 if duration_delta is None or duration_delta <= 2 else min(12,(duration_delta-2)*1.5)
+                value = float(value)
+                return value / 1000 if value > 10000 else value
+            except (TypeError, ValueError):
+                return None
+
+        source_seconds, plex_seconds = (
+            seconds(source_track.get("duration")),
+            seconds(plex_track.get("duration")),
+        )
+        duration_delta = (
+            abs(source_seconds - plex_seconds)
+            if source_seconds is not None and plex_seconds is not None
+            else None
+        )
+        duration_penalty = (
+            0
+            if duration_delta is None or duration_delta <= 2
+            else min(12, (duration_delta - 2) * 1.5)
+        )
         adjusted_score = max(
             0.0,
             min(
@@ -1093,7 +1107,8 @@ class Matcher:
                 - title_variant_penalty
                 - release_intent_penalty
                 - album_provenance_penalty,
-            ) - duration_penalty,
+            )
+            - duration_penalty,
         )
 
         return {
@@ -1114,27 +1129,22 @@ class Matcher:
             "release_intent_penalty": release_intent_penalty,
             "album_provenance_penalty": album_provenance_penalty,
             "album_provenance_mismatch": album_provenance_mismatch,
-            "source_album_requires_provenance": (
-                source_album_requires_provenance
-            ),
+            "source_album_requires_provenance": (source_album_requires_provenance),
             "source_album_types": source_types,
             "plex_album_types": plex_types,
             "source_title_release_types": source_title_types,
             "plex_title_release_types": plex_title_types,
             "requested_variant_types": requested_variant_types,
             "candidate_variant_types": candidate_variant_types,
-            "candidate_title_variant_types": (
-                plex_title_types & cls.VERSION_TYPES
-            ),
-            "candidate_album_variant_types": (
-                plex_types & cls.VERSION_TYPES
-            ),
+            "candidate_title_variant_types": (plex_title_types & cls.VERSION_TYPES),
+            "candidate_album_variant_types": (plex_types & cls.VERSION_TYPES),
         }
 
     @classmethod
-    def match_track(cls,source_track,plex_library,mapping_cache=None):
+    def match_track(cls, source_track, plex_library, mapping_cache=None):
         from .track_bridge import match
-        return match(cls,source_track,plex_library,mapping_cache)
+
+        return match(cls, source_track, plex_library, mapping_cache)
 
     @classmethod
     def _match_catalog_track(
@@ -1148,14 +1158,23 @@ class Matcher:
         if mapping_cache is None:
             mapping_cache = {}
 
-        search_key = (
-            f"{source_track['title']}|{source_track['artist']}"
-        )
+        search_key = f"{source_track['title']}|{source_track['artist']}"
 
         if search_key in mapping_cache:
-            cached = next((track for track in plex_library if str(track.get('plex_id')) == str(mapping_cache[search_key])), None)
-            if (cached is not None and not cls._recording_version_mismatch(source_track, cached)
-                    and cls._feature_identity_reason(source_track, cached) != 'Guest credit omitted; album and duration agree'):
+            cached = next(
+                (
+                    track
+                    for track in plex_library
+                    if str(track.get("plex_id")) == str(mapping_cache[search_key])
+                ),
+                None,
+            )
+            if (
+                cached is not None
+                and not cls._recording_version_mismatch(source_track, cached)
+                and cls._feature_identity_reason(source_track, cached)
+                != "Guest credit omitted; album and duration agree"
+            ):
                 return mapping_cache[search_key]
 
         if not plex_library:
@@ -1168,13 +1187,13 @@ class Matcher:
         pre_scored = {}
         for index, plex_track in enumerate(plex_library):
             title_score, _ = cls._title_score(
-                str(source_track.get('title', '')), str(plex_track.get('title', ''))
+                str(source_track.get("title", "")), str(plex_track.get("title", ""))
             )
             if title_score < 95 or cls._recording_version_mismatch(source_track, plex_track):
                 continue
             details = cls.score_candidate(source_track, plex_track)
             pre_scored[index] = details
-            if details['title_score'] >= 95 and details['artist_score'] >= 85:
+            if details["title_score"] >= 95 and details["artist_score"] >= 85:
                 strong.append((details, plex_track))
         if strong:
             scored = strong
@@ -1198,10 +1217,7 @@ class Matcher:
         strong_identity = [
             item
             for item in scored
-            if (
-                item[0]["title_score"] >= 95
-                and item[0]["artist_score"] >= 85
-            )
+            if (item[0]["title_score"] >= 95 and item[0]["artist_score"] >= 85)
         ]
 
         candidate_pool = strong_identity or scored
@@ -1217,13 +1233,22 @@ class Matcher:
             ),
         )
 
-        if best_details.get('artist_credit_reason') == 'Guest credit omitted; album and duration agree':
+        if (
+            best_details.get("artist_credit_reason")
+            == "Guest credit omitted; album and duration agree"
+        ):
             for details, alternate in candidate_pool:
-                if str(alternate.get('plex_id')) == str(best_track.get('plex_id')):
+                if str(alternate.get("plex_id")) == str(best_track.get("plex_id")):
                     continue
-                if (details['title_score'] >= 95 and details['artist_score'] >= 85
-                        and abs(details['adjusted_score'] - best_details['adjusted_score']) <= 2
-                        and not (alternate.get('recording_id') and alternate.get('recording_id') == best_track.get('recording_id'))):
+                if (
+                    details["title_score"] >= 95
+                    and details["artist_score"] >= 85
+                    and abs(details["adjusted_score"] - best_details["adjusted_score"]) <= 2
+                    and not (
+                        alternate.get("recording_id")
+                        and alternate.get("recording_id") == best_track.get("recording_id")
+                    )
+                ):
                     return None
 
         # Automatic matching has two confidence paths:
@@ -1236,15 +1261,16 @@ class Matcher:
         # strict title/artist gates prevent album metadata from rescuing a
         # clearly different song.
         missing_requested_variant_types = (
-            best_details["requested_variant_types"]
-            - best_details["candidate_variant_types"]
+            best_details["requested_variant_types"] - best_details["candidate_variant_types"]
         )
 
         # A different recording requires review even when song identity is exact.
         # Album metadata can explicitly request live as well as the source title.
-        source_live = 'live' in (cls._title_release_types(source_track.get('title', ''))
-                                 | cls._album_types(source_track.get('album', '')))
-        if 'live' in best_details['candidate_variant_types'] and not source_live:
+        source_live = "live" in (
+            cls._title_release_types(source_track.get("title", ""))
+            | cls._album_types(source_track.get("album", ""))
+        )
+        if "live" in best_details["candidate_variant_types"] and not source_live:
             return None
 
         strong_identity_match = (

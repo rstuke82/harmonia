@@ -6,7 +6,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
-from harmonia import sync_engine
+from harmonia import sync_engine, sync_workflow
 from harmonia.storage import Repository
 
 
@@ -57,7 +57,7 @@ class SyncOutcomes(unittest.TestCase):
             self.plex.get_playlist_items.return_value = [{"plex_id": value} for value in actual]
         with (
             patch.object(
-                sync_engine.network,
+                sync_workflow.network,
                 "get",
                 return_value=Mock(
                     status_code=200,
@@ -65,7 +65,7 @@ class SyncOutcomes(unittest.TestCase):
                 ),
             ),
             patch.object(
-                sync_engine.SpotifyAPI,
+                sync_workflow.SpotifyAPI,
                 "get_playlist_tracks",
                 return_value=(
                     self.tracks,
@@ -84,7 +84,7 @@ class SyncOutcomes(unittest.TestCase):
                 ),
             ),
             patch("harmonia.sync_projection.update") as publish,
-            patch.object(sync_engine, "print") as output,
+            patch.object(sync_workflow, "emit") as output,
         ):
             result = self.sync.sync_playlist(self.playlist, dry_run=dry_run)
         return result, publish, output
@@ -120,7 +120,7 @@ class SyncOutcomes(unittest.TestCase):
         self.assertFalse(publish.call_args.args[-1])
 
     def test_readback_timeout_remains_a_failed_sync(self):
-        result, publish, _ = self.run_sync(sync_engine.network.exceptions.Timeout())
+        result, publish, _ = self.run_sync(sync_workflow.network.exceptions.Timeout())
         self.assertEqual(result["errors"], 1)
         self.assertEqual(self.playlist["last_synced"], "previous")
         self.assertFalse(publish.call_args.args[-1])

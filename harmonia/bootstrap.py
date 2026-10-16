@@ -1,4 +1,5 @@
 """Python dependency validation used by application entry points."""
+
 from typing import List
 from pathlib import Path
 from typing import Tuple
@@ -7,6 +8,7 @@ import re
 import sys
 
 REQUIREMENTS_FILE = Path(__file__).resolve().parent.parent / "requirements.txt"
+
 
 def _requirement_version_tuple(
     value: str,
@@ -25,10 +27,7 @@ def _requirement_version_tuple(
     if not numbers:
         return ()
 
-    return tuple(
-        int(number)
-        for number in numbers[:6]
-    )
+    return tuple(int(number) for number in numbers[:6])
 
 
 def _version_meets_minimum(
@@ -36,21 +35,10 @@ def _version_meets_minimum(
     minimum: str,
 ) -> bool:
     """Return whether an installed version satisfies a >= minimum."""
-    installed_parts = list(
-        _requirement_version_tuple(
-            installed
-        )
-    )
-    minimum_parts = list(
-        _requirement_version_tuple(
-            minimum
-        )
-    )
+    installed_parts = list(_requirement_version_tuple(installed))
+    minimum_parts = list(_requirement_version_tuple(minimum))
 
-    if (
-        not installed_parts
-        or not minimum_parts
-    ):
+    if not installed_parts or not minimum_parts:
         return True
 
     width = max(
@@ -58,26 +46,10 @@ def _version_meets_minimum(
         len(minimum_parts),
     )
 
-    installed_parts.extend(
-        [0]
-        * (
-            width
-            - len(installed_parts)
-        )
-    )
-    minimum_parts.extend(
-        [0]
-        * (
-            width
-            - len(minimum_parts)
-        )
-    )
+    installed_parts.extend([0] * (width - len(installed_parts)))
+    minimum_parts.extend([0] * (width - len(minimum_parts)))
 
-    return tuple(
-        installed_parts
-    ) >= tuple(
-        minimum_parts
-    )
+    return tuple(installed_parts) >= tuple(minimum_parts)
 
 
 def _parse_requirements_file(
@@ -86,14 +58,13 @@ def _parse_requirements_file(
 ) -> List[dict]:
     """Parse Harmonia requirements.txt entries."""
     requirements = []
-    seen=set() if _seen is None else _seen
-    resolved=requirements_path.resolve()
-    if resolved in seen:raise ValueError("Recursive requirements include")
+    seen = set() if _seen is None else _seen
+    resolved = requirements_path.resolve()
+    if resolved in seen:
+        raise ValueError("Recursive requirements include")
     seen.add(resolved)
 
-    for raw_line in requirements_path.read_text(
-        encoding="utf-8"
-    ).splitlines():
+    for raw_line in requirements_path.read_text(encoding="utf-8").splitlines():
         line = raw_line.split(
             "#",
             1,
@@ -103,13 +74,15 @@ def _parse_requirements_file(
             continue
 
         if line.startswith("-r "):
-            included=(requirements_path.parent/line[3:].strip()).resolve()
-            if included.parent!=requirements_path.resolve().parent:raise ValueError("Requirements include must stay in the application directory")
-            requirements.extend(_parse_requirements_file(included,seen))
+            included = (requirements_path.parent / line[3:].strip()).resolve()
+            if included.parent != requirements_path.resolve().parent:
+                raise ValueError("Requirements include must stay in the application directory")
+            requirements.extend(_parse_requirements_file(included, seen))
             continue
         if line.startswith("-"):
             continue
 
+        line = line.split(" --hash=", 1)[0].rstrip(chr(92) + " ").strip()
         line = line.split(
             ";",
             1,
@@ -137,14 +110,8 @@ def _parse_requirements_file(
         requirements.append(
             {
                 "name": match.group(1),
-                "operator": (
-                    match.group(2)
-                    or ""
-                ),
-                "version": (
-                    match.group(3)
-                    or ""
-                ),
+                "operator": (match.group(2) or ""),
+                "version": (match.group(3) or ""),
                 "parse_error": False,
             }
         )
@@ -162,22 +129,14 @@ def _check_requirements(
     This uses importlib.metadata from the Python standard library, allowing
     Harmonia to report all missing/outdated dependencies at once.
     """
-    path = (
-        Path(requirements_path)
-        if requirements_path is not None
-        else REQUIREMENTS_FILE
-    )
+    path = Path(requirements_path) if requirements_path is not None else REQUIREMENTS_FILE
 
     if version_lookup is None:
-        version_lookup = (
-            importlib_metadata.version
-        )
+        version_lookup = importlib_metadata.version
 
     result = {
         "ok": False,
-        "requirements_file": str(
-            path
-        ),
+        "requirements_file": str(path),
         "file_missing": False,
         "missing": [],
         "outdated": [],
@@ -186,96 +145,57 @@ def _check_requirements(
     }
 
     if not path.is_file():
-        result[
-            "file_missing"
-        ] = True
+        result["file_missing"] = True
         return result
 
     try:
-        requirements = (
-            _parse_requirements_file(
-                path
-            )
-        )
+        requirements = _parse_requirements_file(path)
     except (
         OSError,
         UnicodeError,
     ):
-        result[
-            "file_missing"
-        ] = True
+        result["file_missing"] = True
         return result
 
     for requirement in requirements:
-        if requirement[
-            "parse_error"
-        ]:
-            result[
-                "unparsed"
-            ].append(
-                requirement["name"]
-            )
+        if requirement["parse_error"]:
+            result["unparsed"].append(requirement["name"])
             continue
 
-        name = requirement[
-            "name"
-        ]
+        name = requirement["name"]
 
         try:
-            installed = str(
-                version_lookup(
-                    name
-                )
-            )
+            installed = str(version_lookup(name))
         except (
             importlib_metadata.PackageNotFoundError,
             KeyError,
         ):
-            result[
-                "missing"
-            ].append(
+            result["missing"].append(
                 {
                     "name": name,
-                    "required": (
-                        f"{requirement['operator']}"
-                        f"{requirement['version']}"
-                    ),
+                    "required": (f"{requirement['operator']}{requirement['version']}"),
                 }
             )
             continue
         except Exception:
-            result[
-                "missing"
-            ].append(
+            result["missing"].append(
                 {
                     "name": name,
-                    "required": (
-                        f"{requirement['operator']}"
-                        f"{requirement['version']}"
-                    ),
+                    "required": (f"{requirement['operator']}{requirement['version']}"),
                 }
             )
             continue
 
-        result[
-            "checked"
-        ].append(
+        result["checked"].append(
             {
                 "name": name,
                 "installed": installed,
-                "required": (
-                    f"{requirement['operator']}"
-                    f"{requirement['version']}"
-                ),
+                "required": (f"{requirement['operator']}{requirement['version']}"),
             }
         )
 
-        operator = requirement[
-            "operator"
-        ]
-        required_version = requirement[
-            "version"
-        ]
+        operator = requirement["operator"]
+        required_version = requirement["version"]
 
         if (
             operator == ">="
@@ -285,31 +205,16 @@ def _check_requirements(
                 required_version,
             )
         ):
-            result[
-                "outdated"
-            ].append(
+            result["outdated"].append(
                 {
                     "name": name,
                     "installed": installed,
-                    "required": (
-                        f">={required_version}"
-                    ),
+                    "required": (f">={required_version}"),
                 }
             )
 
     result["ok"] = not (
-        result[
-            "file_missing"
-        ]
-        or result[
-            "missing"
-        ]
-        or result[
-            "outdated"
-        ]
-        or result[
-            "unparsed"
-        ]
+        result["file_missing"] or result["missing"] or result["outdated"] or result["unparsed"]
     )
 
     return result
@@ -317,92 +222,38 @@ def _check_requirements(
 
 def _ensure_requirements():
     """Stop startup with install instructions when requirements fail."""
-    result = (
-        _check_requirements()
-    )
+    result = _check_requirements()
 
     if result["ok"]:
         return
 
-    print(
-        "\n✗ Harmonia cannot start because "
-        "its Python requirements are not satisfied."
-    )
+    print("\n✗ Harmonia cannot start because its Python requirements are not satisfied.")
 
-    if result[
-        "file_missing"
-    ]:
-        print(
-            f"\n  requirements.txt was not found at:\n"
-            f"  {result['requirements_file']}"
-        )
-        print(
-            "\n  Restore requirements.txt in the application root "
-            "and try again."
-        )
-        raise SystemExit(
-            1
-        )
+    if result["file_missing"]:
+        print(f"\n  requirements.txt was not found at:\n  {result['requirements_file']}")
+        print("\n  Restore requirements.txt in the application root and try again.")
+        raise SystemExit(1)
 
-    if result[
-        "missing"
-    ]:
-        print(
-            "\nMissing packages:"
-        )
+    if result["missing"]:
+        print("\nMissing packages:")
 
-        for item in result[
-            "missing"
-        ]:
-            print(
-                f"  - "
-                f"{item['name']}"
-                f"{item['required']}"
-            )
+        for item in result["missing"]:
+            print(f"  - {item['name']}{item['required']}")
 
-    if result[
-        "outdated"
-    ]:
-        print(
-            "\nPackages that need to be upgraded:"
-        )
+    if result["outdated"]:
+        print("\nPackages that need to be upgraded:")
 
-        for item in result[
-            "outdated"
-        ]:
-            print(
-                f"  - "
-                f"{item['name']} "
-                f"{item['installed']} "
-                f"(requires "
-                f"{item['required']})"
-            )
+        for item in result["outdated"]:
+            print(f"  - {item['name']} {item['installed']} (requires {item['required']})")
 
-    if result[
-        "unparsed"
-    ]:
-        print(
-            "\nRequirements that could not be checked:"
-        )
+    if result["unparsed"]:
+        print("\nRequirements that could not be checked:")
 
-        for item in result[
-            "unparsed"
-        ]:
-            print(
-                f"  - {item}"
-            )
+        for item in result["unparsed"]:
+            print(f"  - {item}")
 
-    print(
-        "\nInstall/update dependencies with:\n"
-    )
-    print(
-        f'  "{sys.executable}" -m pip install '
-        f'-r "{REQUIREMENTS_FILE}"'
-    )
+    print("\nInstall/update dependencies with:\n")
+    print(f'  "{sys.executable}" -m pip install -r "{REQUIREMENTS_FILE}"')
     print()
 
-    raise SystemExit(
-        1
-    )
-
-
+    raise SystemExit(1)

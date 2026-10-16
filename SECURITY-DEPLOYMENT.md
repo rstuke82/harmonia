@@ -80,7 +80,7 @@ Docker installs requirements.lock, resolved from the tested Python 3.12 runtime;
 
 The included .github/workflows/security.yml builds/tests/scans the actual image on native AMD64 and ARM64 runners. It uses an immutable checkout commit and pinned Docker Scout image. Configure limited Docker Scout credentials in repository secrets if the scanner requires them; missing scanner access is a failed check, not a clean scan. Critical/high advisories fail the check, including unfixed findings. Repository secrets DOCKER_SCOUT_HUB_USER and DOCKER_SCOUT_HUB_PASSWORD are required for the Docker Scout step.
 
-Maintain the lock in an isolated Python 3.12 environment, review changed packages and base/scanner digests, and rerun backend/frontend validation plus both runtime image scans before publication. Pinning improves repeatability; it does not freeze security knowledge or guarantee bit-identical wheel contents without artifact hashes. Review scanner results rather than equating every package finding with a remotely exploitable application defect.
+Maintain the lock in an isolated Python 3.12 environment, review changed packages and base/scanner digests, and rerun backend/frontend validation plus both runtime image scans before publication. All runtime pins include permitted artifact SHA-256 digests, enforced by pip in hash-checking mode. Pinning and hashes improve repeatability; they do not freeze security knowledge. Review scanner results rather than equating every package finding with a remotely exploitable application defect.
 
 ## Notification destinations and development checks
 
@@ -90,8 +90,15 @@ The default observed HTTP timeout is 5 seconds to connect and 30 seconds to read
 
 Update checks can be disabled in Settings → About. Disabled checks make no new registry requests and are not queued by the recurring scheduler. Already running requests may finish.
 
-Development-only checks use requirements-dev.txt. Run `python scripts/lint.py` after installing those dependencies. CI fails on new lint findings compared with lint-baseline.json and checks formatting of the maintained modules listed in the script. Existing lint findings remain a tracked cleanup backlog; the baseline is not a claim that the whole codebase is lint-clean. Update it only after reviewing intentional changes. The runtime image does not install development tools.
+Development-only checks use requirements-dev.txt. Run `python scripts/lint.py` after installing those dependencies. Every Python runtime module, script and test must pass Ruff lint and formatting; there are no baseline exemptions. Run `python scripts/verify_coverage.py` to run backend tests and enforce overall, provider and sync coverage minimums. CI runs these gates and browser checks separately from the runtime image, which contains no development tools.
 
 Repository initialization repairs credential-store permissions. Routine connections check only SQLite database/WAL/SHM files, reject symlinks and hard links, and change file modes only when necessary. The cache retains at most 128 repository instances; account data still uses fresh connections and separate directories.
 
 CI also exercises real React components in headless Chromium under the production CSP, covering themes, artwork, fitted titles, menus and modals. Deliberately injected inline styles and external HTTP images must be blocked.
+
+
+## Job execution budgets
+
+Execution time starts when a worker claims a job, excluding queue time. Limits are 5 minutes for lookups, 10 minutes for page preparation, 15 minutes for download operations, 2 hours for playlist and health operations, 6 hours for catalog/metadata work, and 1 hour for maintenance. The scheduler reports an exceeded budget as stopping; subsequent safe checkpoints fail the job with a clear runtime-limit error. HTTP calls outside a protected write also respect the remaining budget.
+
+Cancellation is cooperative. An in-flight Plex replacement retains its destination lock and recovery snapshot until the current write or restoration finishes. It is never marked finished merely because a timer elapsed. A blocked native call cannot be forcibly killed safely inside a Python thread; restarting the container marks unfinished work interrupted, and durable playlist recovery runs before the next replacement.

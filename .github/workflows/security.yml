@@ -16,7 +16,7 @@ jobs:
         run: |
           python3 -m venv "$RUNNER_TEMP/harmonia-quality"
           "$RUNNER_TEMP/harmonia-quality/bin/python" -m pip install -r requirements-dev.txt
-      - name: Check lint regression and formatting
+      - name: Check lint and formatting
         run: '"$RUNNER_TEMP/harmonia-quality/bin/python" scripts/lint.py'
   browser:
     runs-on: ubuntu-24.04
@@ -28,8 +28,11 @@ jobs:
         run: |
           npm --prefix web ci
           python3 -m venv "$RUNNER_TEMP/harmonia-browser"
-          "$RUNNER_TEMP/harmonia-browser/bin/python" -m pip install -r requirements.lock playwright==1.56.0
+          "$RUNNER_TEMP/harmonia-browser/bin/python" -m pip install -r requirements.lock
+          "$RUNNER_TEMP/harmonia-browser/bin/python" -m pip install playwright==1.56.0 coverage==7.13.1
           "$RUNNER_TEMP/harmonia-browser/bin/python" -m playwright install --with-deps chromium --only-shell
+      - name: Measure backend regression coverage
+        run: '"$RUNNER_TEMP/harmonia-browser/bin/python" scripts/verify_coverage.py'
       - name: Verify page loading and background refresh feedback
         run: '"$RUNNER_TEMP/harmonia-browser/bin/python" scripts/verify_page_loading.py'
       - name: Verify production CSP and dynamic React styling

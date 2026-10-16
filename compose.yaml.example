@@ -18,6 +18,8 @@ services:
       - no-new-privileges:true
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=64m
+    # LAN access: this publishes on all host interfaces. Restrict access with a firewall.
+    # For a reverse proxy on this host, use "127.0.0.1:8173:8173" instead.
     ports:
       - "8173:8173"
     environment:

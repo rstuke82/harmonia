@@ -7,7 +7,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 from fastapi import HTTPException
 from starlette.requests import Request
-import test_30
+import test_account_isolation
 from harmonia import accounts, api, route_access, saved_views
 from harmonia.jobs import Store
 from harmonia.lidarr_requests import server_id
@@ -15,12 +15,12 @@ from harmonia.lidarr_requests import server_id
 
 class RequestVisibility(unittest.TestCase):
     def setUp(self):
-        test_30.MultiUser.setUp(self)
+        test_account_isolation.MultiUser.setUp(self)
         patched = patch("harmonia.saved_views.root_repository", return_value=self.repo)
         patched.start()
         self.addCleanup(patched.stop)
 
-    http = test_30.MultiUser.http
+    http = test_account_isolation.MultiUser.http
 
     def endpoint(self, path):
         return next(r.endpoint for r in api.app.routes if getattr(r, "path", "") == path)

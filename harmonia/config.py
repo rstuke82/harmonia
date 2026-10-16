@@ -1,4 +1,5 @@
 """Account-scoped configuration and saved playlist state."""
+
 from typing import List
 from typing import Optional
 import copy
@@ -7,8 +8,16 @@ from . import network
 from urllib.parse import unquote
 from urllib.parse import urlparse
 from .matching import Matcher
-from .runtime_paths import CONFIG_FILE, IGNORED_TRACKS_FILE, MAPPING_FILE, MATCH_METADATA_FILE, MISSING_FILE, SOURCE_SNAPSHOTS_FILE
+from .runtime_paths import (
+    CONFIG_FILE,
+    IGNORED_TRACKS_FILE,
+    MAPPING_FILE,
+    MATCH_METADATA_FILE,
+    MISSING_FILE,
+    SOURCE_SNAPSHOTS_FILE,
+)
 from .text_utils import repair_text
+
 
 class Config:
     """Handle configuration file management"""
@@ -25,20 +34,37 @@ class Config:
     def __init__(self, *, read_only=False, namespaces=None):
         from .storage import read_json
         from .accounts import personal_repository, root_repository, actor
+
         self.repository = personal_repository()
         self._account = actor()
         self.read_only = read_only
         self.config = read_json(CONFIG_FILE)
         runtime = self.repository.load("runtime")
         self.config.update(runtime)
-        if self._account and not __import__("harmonia.accounts",fromlist=["is_owner"]).is_owner(self._account):
-            self.config["plex"] = {**self.config.get("plex", {}), "token": self._account["plex_token"]}
+        if self._account and not __import__("harmonia.accounts", fromlist=["is_owner"]).is_owner(
+            self._account
+        ):
+            self.config["plex"] = {
+                **self.config.get("plex", {}),
+                "token": self._account["plex_token"],
+            }
         if not isinstance(self.config.get("plex"), dict):
             self.config["plex"] = {}
         self.config.setdefault("playlists", [])
-        names = ("mapping", "missing", "match_metadata", "source_snapshots", "ignored_tracks", "artist_aliases")
-        for name in (names if not read_only or namespaces is None else namespaces):
-            setattr(self, name, (root_repository() if name=="artist_aliases" else self.repository).load(name))
+        names = (
+            "mapping",
+            "missing",
+            "match_metadata",
+            "source_snapshots",
+            "ignored_tracks",
+            "artist_aliases",
+        )
+        for name in names if not read_only or namespaces is None else namespaces:
+            setattr(
+                self,
+                name,
+                (root_repository() if name == "artist_aliases" else self.repository).load(name),
+            )
         self._baseline = None if read_only else copy.deepcopy(self._buckets())
         if self._baseline is not None:
             self._baseline["runtime"] = copy.deepcopy(runtime)
@@ -46,7 +72,16 @@ class Config:
             Matcher.set_artist_aliases(self.artist_aliases)
 
     def __getattr__(self, name):
-        if name in ("mapping", "missing", "match_metadata", "source_snapshots", "ignored_tracks", "artist_aliases", "health", "health_attempts"):
+        if name in (
+            "mapping",
+            "missing",
+            "match_metadata",
+            "source_snapshots",
+            "ignored_tracks",
+            "artist_aliases",
+            "health",
+            "health_attempts",
+        ):
             value = self.repository.load(name)
             setattr(self, name, value)
             return value
@@ -59,9 +94,7 @@ class Config:
     def reload_artist_aliases(self):
         """Reload artist aliases and update the matcher immediately."""
         self.artist_aliases = self.repository.load("artist_aliases")
-        Matcher.set_artist_aliases(
-            self.artist_aliases
-        )
+        Matcher.set_artist_aliases(self.artist_aliases)
 
     def save_artist_aliases(self):
         self._assert_writable()
@@ -76,8 +109,18 @@ class Config:
 
     def _buckets(self):
         from .storage import STARTUP_KEYS
-        buckets = {name: getattr(self, name) for name in (
-            "mapping", "missing", "match_metadata", "source_snapshots", "ignored_tracks", "artist_aliases")}
+
+        buckets = {
+            name: getattr(self, name)
+            for name in (
+                "mapping",
+                "missing",
+                "match_metadata",
+                "source_snapshots",
+                "ignored_tracks",
+                "artist_aliases",
+            )
+        }
         buckets["runtime"] = {k: v for k, v in self.config.items() if k not in STARTUP_KEYS}
         return buckets
 
@@ -92,11 +135,20 @@ class Config:
     def save(self):
         self._assert_writable()
         from .storage import STARTUP_KEYS, read_json
+
         buckets = self._buckets()
         self.repository.save(buckets, self._baseline, replace=True)
         self._baseline = copy.deepcopy(buckets)
         startup = {k: v for k, v in self.config.items() if k in STARTUP_KEYS}
-        if not (self._account and not __import__("harmonia.accounts",fromlist=["is_owner"]).is_owner(self._account)) and read_json(CONFIG_FILE) != startup:
+        if (
+            not (
+                self._account
+                and not __import__("harmonia.accounts", fromlist=["is_owner"]).is_owner(
+                    self._account
+                )
+            )
+            and read_json(CONFIG_FILE) != startup
+        ):
             self.repository.save_startup(startup)
 
     @staticmethod
@@ -115,16 +167,9 @@ class Config:
         )
 
         if resp.status_code != 200:
-            raise RuntimeError(
-                "Failed to get Plex library sections: "
-                f"HTTP {resp.status_code}"
-            )
+            raise RuntimeError(f"Failed to get Plex library sections: HTTP {resp.status_code}")
 
-        sections = (
-            resp.json()
-            .get("MediaContainer", {})
-            .get("Directory", [])
-        )
+        sections = resp.json().get("MediaContainer", {}).get("Directory", [])
 
         libraries = []
 
@@ -140,10 +185,7 @@ class Config:
             libraries.append(
                 {
                     "key": str(key),
-                    "name": repair_text(
-                        section.get("title", "")
-                    ).strip()
-                    or f"Music Library {key}",
+                    "name": repair_text(section.get("title", "")).strip() or f"Music Library {key}",
                 }
             )
 
@@ -152,6 +194,7 @@ class Config:
     def get_plex(self) -> dict:
         """Return validated saved Plex settings without discovery or prompts."""
         from .diagnostics import validate_plex_config
+
         return validate_plex_config(self)
 
     def add_playlist(
@@ -216,8 +259,11 @@ class Config:
 
         if source_type == "text":
             import uuid
-            try:return str(uuid.UUID(value.removeprefix("text:")))
-            except ValueError:return None
+
+            try:
+                return str(uuid.UUID(value.removeprefix("text:")))
+            except ValueError:
+                return None
 
         if source_type == "spotify":
             # spotify:playlist:7eahWLng9go8LDR5gcW6A3
@@ -297,27 +343,26 @@ class Config:
     @staticmethod
     def _canonical_source_url(url: str, source_type: str) -> str:
         """Return a stable URL for storage and future syncs."""
-        if source_type == 'text':
+        if source_type == "text":
             return Config._normalize_url_input(url)
         from .playlist_urls import canonical_playlist
+
         return canonical_playlist(Config._normalize_url_input(url), source_type)[1]
 
     def find_playlist(self, source_url: str) -> Optional[dict]:
         """Find a playlist by canonical source identity, not query string."""
         normalized = self._normalize_url_input(source_url)
 
-        if "spotify.com" in normalized.lower() or normalized.lower().startswith("spotify:playlist:"):
+        if "spotify.com" in normalized.lower() or normalized.lower().startswith(
+            "spotify:playlist:"
+        ):
             source_type = "spotify"
         elif "music.apple.com" in normalized.lower() or "itunes.apple.com" in normalized.lower():
             source_type = "applemusic"
         else:
             source_type = None
 
-        requested_id = (
-            self._extract_id(normalized, source_type)
-            if source_type
-            else None
-        )
+        requested_id = self._extract_id(normalized, source_type) if source_type else None
 
         for playlist in self.config["playlists"]:
             if source_type and playlist.get("source") == source_type:
@@ -340,5 +385,3 @@ class Config:
             self.save()
             return True
         return False
-
-

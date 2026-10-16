@@ -1,9 +1,15 @@
 # To do
 
-- [ ] **M2 — Refactor the sync engine.** Split `harmonia/sync_engine.py` into smaller modules with clear responsibilities for source loading, matching, Plex playlist updates, verification, and saved state. Preserve existing matching rules, account isolation, duplicate handling, and playlist recovery. Add regression coverage before moving behavior, and migrate incrementally. Queued for future work; no build assigned.
+- [x] **M2 — Refactor the sync engine.** Split saved match state, source observations, matching and sync workflow into focused modules. Separate identity repair, dry-run reporting, verification and output phases; retain the Syncer API, destination locks and recovery. Implemented in build 103.
+
+- [x] **Remaining audit code changes.** Job budgets, strict quality gates, runtime logging, provider/sync coverage, descriptive tests, asset cleanup, RapidFuzz and authenticated runtime pins are implemented in build 103. See AUDIT.md for validation and operational limits.
 
 - [x] **M3/M4 — Network consistency and timeouts.** Route application HTTP calls through the shared transport, enforce finite connection/read bounds, and preserve authenticated redirect, artwork, and playlist-write protections. Implemented in build 98.
 
 - [x] **Page performance and visible loading.** Reduce repeated Library rebuilding and history lookup work; show nonblocking loading, background refresh, preparation progress and retry feedback. Implemented in build 101.
 
 - [x] **Activity-only refresh feedback and responsive reads.** Remove page-shifting banners, compact job polling/history, reuse saved matching links and avoid unrelated scoring on strong identity matches. Implemented in build 102.
+
+
+- [ ] **Sidebar failure wording.** Distinguish unreviewed historical job failures from currently actionable problems; link directly to the relevant job.
+- [ ] **Deployment validation.** Confirm current foreground latency and live Plex playlist behavior on the deployment; scan the exact new runtime image after Docker authentication or source push.

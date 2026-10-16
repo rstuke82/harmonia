@@ -10,6 +10,7 @@ def main() -> int:
 
     if command in {"web", "serve", "ui"}:
         from .api import run
+
         run()
         return 0
 

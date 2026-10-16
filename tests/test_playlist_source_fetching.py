@@ -7,7 +7,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
-from harmonia import apple_music_source, spotify_source, sync_engine
+from harmonia import apple_music_source, spotify_source, sync_engine, sync_workflow
 from harmonia.storage import Repository
 
 SPOTIFY = "37i9dQZF1DXcBWIGoYBM5M"
@@ -164,9 +164,9 @@ class SyncSourceSafety(unittest.TestCase):
 
     def test_fetch_failure_never_changes_plex_contents(self):
         with (
-            patch.object(sync_engine.network, "get", return_value=self.destination),
+            patch.object(sync_workflow.network, "get", return_value=self.destination),
             patch.object(
-                sync_engine.SpotifyAPI,
+                sync_workflow.SpotifyAPI,
                 "get_playlist_tracks",
                 side_effect=RuntimeError("Service unavailable"),
             ),
@@ -179,9 +179,9 @@ class SyncSourceSafety(unittest.TestCase):
 
     def test_incomplete_source_is_rejected_before_matching_or_writing(self):
         with (
-            patch.object(sync_engine.network, "get", return_value=self.destination),
+            patch.object(sync_workflow.network, "get", return_value=self.destination),
             patch.object(
-                sync_engine.SpotifyAPI,
+                sync_workflow.SpotifyAPI,
                 "get_playlist_tracks",
                 return_value=([{"title": "One", "artist": "Artist"}], {"expected_track_count": 2}),
             ),

@@ -109,6 +109,10 @@ def request(method, url, **kwargs):
         kwargs["allow_redirects"] = False
     host = (urlsplit(str(url)).hostname or "").lower()
     ctx = jobs.current()
+    if ctx and hasattr(ctx, "deadline") and not ctx.safe_depth:
+        ctx.checkpoint()
+        remaining = max(0.001, ctx.deadline - time.monotonic())
+        kwargs["timeout"] = tuple(min(bound, remaining) for bound in kwargs["timeout"])
     plex_host = (
         urlsplit(ctx.redaction_config.config.get("plex", {}).get("url", "")).hostname
         if ctx
@@ -147,6 +151,11 @@ def request(method, url, **kwargs):
     with jobs.waiting(service):
         attempts = 3 if str(method).upper() == "GET" else 1
         for attempt in range(1, attempts + 1):
+            if ctx and hasattr(ctx, "deadline"):
+                ctx.checkpoint()
+                if not ctx.safe_depth:
+                    remaining = max(0.001, ctx.deadline - time.monotonic())
+                    kwargs["timeout"] = tuple(min(bound, remaining) for bound in kwargs["timeout"])
             try:
                 response = (session.request if session is not None else _requests.request)(
                     method, url, **kwargs

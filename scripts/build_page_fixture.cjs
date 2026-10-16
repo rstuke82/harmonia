@@ -1,22 +1,23 @@
 const path=require('node:path'),fs=require('node:fs');
 const root=path.resolve(__dirname,'..'),output=process.argv[2],esbuild=require(path.join(root,'web/node_modules/esbuild'));
-const source=`import React from 'react';
+const source=`import './app.css';
+import React from 'react';
 import {createRoot} from 'react-dom/client';
 import PageLoading from './PageLoading';
 import {beginRead,resetReads} from './readActivity';
 import {api} from './api';
-import './styles.css';
-import './beta7.css';
-import './beta8.css';
-import './three.css';
-import './glass.css';
-import './beta15.css';
-import './build-20261005.css';
-import './release.css';
-import './pass-20261008.css';
-import './links-20261009.css';
-import './discover-layout.css';
-import './navigation.css';
+
+
+
+
+
+
+
+
+
+
+
+
 window.mockMode='stale';window.location.hash='playlists';
 window.fetch=async path=>{
  if(window.mockMode==='fail')throw new TypeError('Connection lost');

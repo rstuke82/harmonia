@@ -1,6 +1,8 @@
 """Shared text repair and source labels."""
+
 import re
 from .terminal import Colors, colored, dimmed
+
 
 def repair_text(value) -> str:
     """
@@ -19,9 +21,8 @@ def repair_text(value) -> str:
     suspicious_markers = ("Ã", "Â", "â", "ð", "Å", "�")
 
     def suspicious_count(candidate: str) -> int:
-        return (
-            sum(candidate.count(marker) for marker in suspicious_markers)
-            + sum(1 for ch in candidate if 0x80 <= ord(ch) <= 0x9F)
+        return sum(candidate.count(marker) for marker in suspicious_markers) + sum(
+            1 for ch in candidate if 0x80 <= ord(ch) <= 0x9F
         )
 
     # Two passes also repairs common double-encoded strings.
@@ -130,11 +131,3 @@ def source_album_display(track: dict) -> str:
         )
 
     return dimmed("(N/A)")
-
-
-
-
-
-
-
-

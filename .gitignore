@@ -57,3 +57,9 @@ backups/
 
 # Local deployment file; the public template is compose.yaml.example.
 /compose.yaml
+
+# Local coverage output
+.coverage
+.coverage.*
+htmlcov/
+coverage.json

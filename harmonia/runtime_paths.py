@@ -1,4 +1,5 @@
 """Data paths and persisted schema identifiers shared by runtime modules."""
+
 import os
 from pathlib import Path
 
@@ -30,5 +31,3 @@ STATE_SCHEMA_VERSION = 2
 
 
 APPLE_ARTWORK_SIZE = 3000
-
-

@@ -1,6 +1,7 @@
 """Exercise real React styling under production CSP in a disposable headless browser."""
 
 import mimetypes
+import os
 import subprocess
 import tempfile
 import threading
@@ -45,7 +46,14 @@ def main():
         thread.start()
         try:
             with sync_playwright() as playwright:
-                browser = playwright.chromium.launch(headless=True)
+                browser = playwright.chromium.launch(
+                    headless=True,
+                    **(
+                        {"channel": os.environ["HARMONIA_TEST_BROWSER"]}
+                        if os.environ.get("HARMONIA_TEST_BROWSER")
+                        else {}
+                    ),
+                )
                 page = browser.new_page(viewport={"width": 1200, "height": 900})
                 errors = []
                 page.on("pageerror", lambda error: errors.append(str(error)))

@@ -1,4 +1,5 @@
 """Spotify playlist metadata, track extraction and artwork lookup."""
+
 from typing import List
 from typing import Tuple
 import json
@@ -8,8 +9,9 @@ from .track_duration import source_duration
 from html import unescape
 from urllib.parse import urlparse
 from .config import Config
-from .runtime_output import print
+from .runtime_output import emit
 from .text_utils import clean_playlist_description, repair_text
+
 
 class SpotifyAPI:
     """Spotify API wrapper - scrapes public playlists without auth."""
@@ -45,9 +47,17 @@ class SpotifyAPI:
             return ""
 
         blocked_suffixes = (
-            ".css", ".js", ".mjs", ".map",
-            ".woff", ".woff2", ".ttf", ".otf",
-            ".json", ".html", ".svg",
+            ".css",
+            ".js",
+            ".mjs",
+            ".map",
+            ".woff",
+            ".woff2",
+            ".ttf",
+            ".otf",
+            ".json",
+            ".html",
+            ".svg",
         )
 
         if path.endswith(blocked_suffixes):
@@ -58,8 +68,7 @@ class SpotifyAPI:
 
         # Current Spotify custom/playlist artwork CDN.
         if host.endswith(".spotifycdn.com") and (
-            host.startswith("image-cdn-")
-            or ".image-cdn-" in host
+            host.startswith("image-cdn-") or ".image-cdn-" in host
         ):
             return value
 
@@ -72,14 +81,12 @@ class SpotifyAPI:
             return value
 
         # Conservative fallback for explicit image files.
-        if (
-            host.endswith("spotifycdn.com")
-            or host.endswith("scdn.co")
-        ) and re.search(r"\.(?:jpe?g|png|webp|gif|avif)$", path):
+        if (host.endswith("spotifycdn.com") or host.endswith("scdn.co")) and re.search(
+            r"\.(?:jpe?g|png|webp|gif|avif)$", path
+        ):
             return value
 
         return ""
-
 
     @classmethod
     def _extract_artwork_url(cls, html_text: str, entity: dict = None) -> str:
@@ -119,7 +126,7 @@ class SpotifyAPI:
                 add(match)
 
         # Spotify's playlist-header image is commonly eager-loaded.
-        for tag in re.findall(r'<img\b[^>]*>', html_text, re.IGNORECASE):
+        for tag in re.findall(r"<img\b[^>]*>", html_text, re.IGNORECASE):
             if re.search(r'loading=["\']eager["\']', tag, re.IGNORECASE):
                 src_match = re.search(r'src=["\']([^"\']+)["\']', tag, re.IGNORECASE)
                 if src_match:
@@ -129,7 +136,7 @@ class SpotifyAPI:
         # image-cdn-fa.spotifycdn.com without hard-coding the region.
         direct_patterns = [
             r'https://(?:[A-Za-z0-9-]+\.)?image-cdn-[A-Za-z0-9-]+\.spotifycdn\.com/[^"\'\s<>]+',
-            r'https://i\.scdn\.co/image/[A-Za-z0-9]+',
+            r"https://i\.scdn\.co/image/[A-Za-z0-9]+",
             r'https://mosaic\.scdn\.co/[^"\'\s<>]+',
         ]
         for pattern in direct_patterns:
@@ -138,9 +145,7 @@ class SpotifyAPI:
 
         # Prefer playlist-cover/CDN style URLs over arbitrary nested images.
         for candidate in candidates:
-            if "/image/" in candidate and (
-                "image-cdn-" in candidate or "i.scdn.co" in candidate
-            ):
+            if "/image/" in candidate and ("image-cdn-" in candidate or "i.scdn.co" in candidate):
                 return candidate
 
         return candidates[0] if candidates else ""
@@ -157,9 +162,7 @@ class SpotifyAPI:
         if not normalized_id:
             return ""
 
-        public_url = (
-            f"https://open.spotify.com/playlist/{normalized_id}"
-        )
+        public_url = f"https://open.spotify.com/playlist/{normalized_id}"
 
         try:
             resp = network.get(
@@ -184,13 +187,10 @@ class SpotifyAPI:
             except ValueError:
                 return ""
 
-            return cls._clean_artwork_url(
-                data.get("thumbnail_url", "")
-            )
+            return cls._clean_artwork_url(data.get("thumbnail_url", ""))
 
         except network.RequestException:
             return ""
-
 
     def get_playlist_tracks(
         self,
@@ -206,9 +206,7 @@ class SpotifyAPI:
 
         normalized_id = Config._extract_id(playlist_id, "spotify")
         if not normalized_id:
-            raise Exception(
-                "Could not extract Spotify playlist ID from the supplied URL"
-            )
+            raise Exception("Could not extract Spotify playlist ID from the supplied URL")
 
         embed_url = f"https://open.spotify.com/embed/playlist/{normalized_id}"
         public_url = f"https://open.spotify.com/playlist/{normalized_id}"
@@ -220,8 +218,7 @@ class SpotifyAPI:
                 "Chrome/124.0.0.0 Safari/537.36"
             ),
             "Accept": (
-                "text/html,application/xhtml+xml,application/xml;"
-                "q=0.9,image/webp,*/*;q=0.8"
+                "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8"
             ),
             "Accept-Language": "en-US,en;q=0.5",
             "Connection": "keep-alive",
@@ -235,15 +232,13 @@ class SpotifyAPI:
         try:
             resp = network.get(embed_url, headers=headers, timeout=10)
             if resp.status_code != 200:
-                raise Exception(
-                    f"Failed to fetch Spotify playlist: {resp.status_code}"
-                )
+                raise Exception(f"Failed to fetch Spotify playlist: {resp.status_code}")
 
             html_text = resp.text
 
             match = re.search(
                 r'<script id="__NEXT_DATA__" type="application/json">'
-                r'({.*?})</script>',
+                r"({.*?})</script>",
                 html_text,
                 re.DOTALL,
             )
@@ -261,12 +256,8 @@ class SpotifyAPI:
             if not entity:
                 raise Exception("Could not parse playlist entity data")
 
-            name = repair_text(
-                entity.get("name", "Unknown Playlist")
-            )
-            description = clean_playlist_description(
-                entity.get("description", "")
-            )
+            name = repair_text(entity.get("name", "Unknown Playlist"))
+            description = clean_playlist_description(entity.get("description", ""))
 
             image_url = ""
 
@@ -277,7 +268,7 @@ class SpotifyAPI:
                 image_url = self._fetch_oembed_artwork(normalized_id)
 
                 if image_url:
-                    print(f"  ✓ Artwork via Spotify oEmbed: {image_url}")
+                    emit(f"  ✓ Artwork via Spotify oEmbed: {image_url}")
                 else:
                     # Fall back to the embed page if oEmbed did not return art.
                     image_url = self._extract_artwork_url(html_text, entity)
@@ -292,19 +283,14 @@ class SpotifyAPI:
                                 timeout=10,
                             )
                             if public_resp.status_code == 200:
-                                image_url = self._extract_artwork_url(
-                                    public_resp.text
-                                )
+                                image_url = self._extract_artwork_url(public_resp.text)
                         except network.RequestException:
                             pass
 
                     if image_url:
-                        print(
-                            f"  ✓ Artwork extracted from Spotify page: "
-                            f"{image_url}"
-                        )
+                        emit(f"  ✓ Artwork extracted from Spotify page: {image_url}")
                     else:
-                        print(
+                        emit(
                             "  ⚠ No Spotify playlist artwork found "
                             "(oEmbed and page fallbacks failed)"
                         )
@@ -319,19 +305,13 @@ class SpotifyAPI:
                 if not track:
                     continue
 
-                title = (
-                    track.get("title")
-                    or track.get("name")
-                    or "Unknown Title"
-                )
+                title = track.get("title") or track.get("name") or "Unknown Title"
 
                 if "subtitle" in track:
                     artist_names = track.get("subtitle")
                 else:
                     artists = track.get("artists", [])
-                    artist_names = ", ".join(
-                        a.get("name", "Unknown Artist") for a in artists
-                    )
+                    artist_names = ", ".join(a.get("name", "Unknown Artist") for a in artists)
 
                 if not artist_names:
                     artist_names = "Unknown Artist"
@@ -339,40 +319,29 @@ class SpotifyAPI:
                 # Spotify's embed payload is not consistent about album
                 # metadata, but preserve it whenever it is available so the
                 # matcher can prefer the original studio-album copy.
-                album_name = (
-                    track.get("albumName")
-                    or track.get("album_name")
-                    or ""
-                )
+                album_name = track.get("albumName") or track.get("album_name") or ""
 
                 album_obj = track.get("album")
                 if not album_name and isinstance(album_obj, dict):
-                    album_name = (
-                        album_obj.get("name")
-                        or album_obj.get("title")
-                        or ""
-                    )
+                    album_name = album_obj.get("name") or album_obj.get("title") or ""
                 elif not album_name and isinstance(album_obj, str):
                     album_name = album_obj
 
-                track_uri = str(
-                    track.get("uri", "") or ""
-                )
-                source_track_id = str(
-                    track.get("id", "") or ""
-                )
+                track_uri = str(track.get("uri", "") or "")
+                source_track_id = str(track.get("id", "") or "")
 
-                if (
-                    not source_track_id
-                    and track_uri.startswith("spotify:track:")
-                ):
+                if not source_track_id and track_uri.startswith("spotify:track:"):
                     source_track_id = track_uri.rsplit(":", 1)[-1]
 
                 track_list.append(
                     {
                         "title": repair_text(title),
                         "artist": repair_text(artist_names),
-                        "artists": [{"name":repair_text(a.get("name", ""))} for a in track.get("artists",[]) if isinstance(a,dict) and a.get("name")],
+                        "artists": [
+                            {"name": repair_text(a.get("name", ""))}
+                            for a in track.get("artists", [])
+                            if isinstance(a, dict) and a.get("name")
+                        ],
                         "album": repair_text(album_name),
                         "source_id": source_track_id,
                         "uri": track_uri,
@@ -380,28 +349,28 @@ class SpotifyAPI:
                     }
                 )
 
-            expected = entity.get('trackListTotal') or entity.get('totalTrackCount') or entity.get('trackCount')
-            if not isinstance(expected,int):
-                container=entity.get('tracks',{})
-                expected=container.get('total') if isinstance(container,dict) else None
+            expected = (
+                entity.get("trackListTotal")
+                or entity.get("totalTrackCount")
+                or entity.get("trackCount")
+            )
+            if not isinstance(expected, int):
+                container = entity.get("tracks", {})
+                expected = container.get("total") if isinstance(container, dict) else None
             return track_list, {
                 "name": name,
                 "description": description,
                 "image_url": image_url,
                 "source_url": public_url,
                 "expected_track_count": expected,
-                "complete": isinstance(expected,int) and len(track_list)>=expected,
+                "complete": isinstance(expected, int) and len(track_list) >= expected,
             }
 
         except network.exceptions.Timeout:
-            raise Exception(
-                "Request timed out. Spotify is tarpitting the connection."
-            )
+            raise Exception("Request timed out. Spotify is tarpitting the connection.")
         except network.exceptions.RequestException as e:
             raise Exception(f"Connection error: {e}")
         except json.JSONDecodeError as e:
             raise Exception(f"Failed to parse playlist JSON: {e}")
         except Exception as e:
             raise Exception(f"Failed to extract playlist data: {e}")
-
-
